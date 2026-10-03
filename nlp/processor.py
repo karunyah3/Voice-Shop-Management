@@ -1,7 +1,7 @@
 """
 Central NLP Processor Orchestrator.
-Coordinates Intent Detection, Entity Extraction, Context State Transitions,
-Confidence Scoring, Inventory Validation, and Natural Language Response Generation.
+Coordinates Natural Language Intent Detection, Entity Extraction, Context Dialogue Transitions,
+Confidence Scoring, Inventory Stock Validation, and Natural Assistant Responses.
 """
 from typing import Dict, Any, List, Optional
 import json
@@ -12,7 +12,8 @@ from .entity_extractor import (
     extract_correction_target,
     extract_quantity_and_unit,
     extract_amount,
-    extract_product_name
+    extract_product_name,
+    extract_party_name
 )
 from .confidence import calculate_confidence
 from .context_manager import ContextManager, ContextState
@@ -44,7 +45,7 @@ class NLPProcessor:
         if not text:
             return {
                 "success": False,
-                "message": "Please speak or type a transaction command.",
+                "message": "Listening... Speak your command naturally.",
                 "state": ContextState.IDLE,
                 "confidence": 0.0,
                 "confidence_status": "LOW",
@@ -55,23 +56,22 @@ class NLPProcessor:
 
         ctx = self.context_mgr.get_context()
         known_products = self._get_known_product_names()
-        
+
         # 1. Detect Intent
         intent, intent_score, match_rule = detect_intent(text, current_state=ctx.state)
 
         # 2. Process Intent based on dialogue state
         # ----------------------------------------------------
-        # CASE A: CONFIRMATION ("yes", "confirm", "proceed", "save it")
+        # CASE A: CONFIRMATION ("yes", "confirm", "proceed", "save it", "correct", "sure")
         # ----------------------------------------------------
         if intent == IntentType.CONFIRMATION:
             if ctx.state == ContextState.AWAITING_CONFIRMATION and ctx.intent:
                 return self._execute_confirmed_transaction(ctx)
             elif ctx.state in (ContextState.AWAITING_QUANTITY, ContextState.AWAITING_AMOUNT, ContextState.AWAITING_PRODUCT):
-                # Prompt for the missing info instead of confirming prematurely
                 missing_str = ", ".join(ctx.missing_slots or [])
                 return {
                     "success": False,
-                    "message": f"Cannot confirm yet. Missing required details: {missing_str}. {ctx.last_prompt}",
+                    "message": f"Please provide {missing_str} first. {ctx.last_prompt}",
                     "state": ctx.state,
                     "confidence": ctx.confidence,
                     "confidence_status": "MEDIUM",
@@ -82,7 +82,7 @@ class NLPProcessor:
             else:
                 return {
                     "success": False,
-                    "message": "There is no pending transaction to confirm. Try saying: 'Bought 20 kg rice for 800 rupees'.",
+                    "message": "There is no pending transaction to confirm.",
                     "state": ContextState.IDLE,
                     "confidence": 0.90,
                     "confidence_status": "HIGH",
@@ -99,7 +99,7 @@ class NLPProcessor:
                 self.context_mgr.reset_context()
                 return {
                     "success": True,
-                    "message": "Pending transaction was discarded.",
+                    "message": "Transaction discarded.",
                     "state": ContextState.IDLE,
                     "confidence": 0.95,
                     "confidence_status": "HIGH",
@@ -122,7 +122,7 @@ class NLPProcessor:
         # ----------------------------------------------------
         # CASE C: CORRECTION ("Actually change quantity to 15 kg", "Change amount to 700")
         # ----------------------------------------------------
-        if intent == IntentType.CORRECTION or (ctx.state != ContextState.IDLE and any(w in text.lower() for w in ["change", "actually", "make it", "instead"])):
+        if intent == IntentType.CORRECTION or (ctx.state != ContextState.IDLE and any(w in text.lower() for w in ["change", "actually", "make it", "instead", "modify"])):
             if ctx.intent in (IntentType.PURCHASE, IntentType.SALE, IntentType.EXPENSE):
                 correction = extract_correction_target(text)
                 ctx, update_msg = self.context_mgr.apply_correction(correction)
@@ -130,7 +130,7 @@ class NLPProcessor:
             else:
                 return {
                     "success": False,
-                    "message": "No pending transaction to modify. Please initiate a new transaction.",
+                    "message": "No pending transaction to modify.",
                     "state": ContextState.IDLE,
                     "confidence": 0.80,
                     "confidence_status": "MEDIUM",
@@ -153,7 +153,6 @@ class NLPProcessor:
         # CASE E: MULTI-TURN SLOT FILLING (When waiting for a missing slot)
         # ----------------------------------------------------
         if ctx.state in (ContextState.AWAITING_QUANTITY, ContextState.AWAITING_AMOUNT, ContextState.AWAITING_PRODUCT):
-            # Check if this input fills the missing slot
             filled = False
             if ctx.state == ContextState.AWAITING_QUANTITY:
                 qty, unit = extract_quantity_and_unit(text)
@@ -190,7 +189,7 @@ class NLPProcessor:
         # ----------------------------------------------------
         if intent in (IntentType.PURCHASE, IntentType.SALE, IntentType.EXPENSE):
             entities = extract_all_entities(text, intent=intent, known_products=known_products)
-            
+
             # If product exists in database, use product's default unit if not mentioned
             if entities.get("product") and not entities.get("unit"):
                 prod_obj = self._get_product_by_name(entities["product"])
@@ -199,7 +198,7 @@ class NLPProcessor:
 
             # Calculate confidence and missing fields
             conf_score, conf_status, missing_slots, factors = calculate_confidence(intent, entities, text)
-            
+
             # Create fresh pending context
             ctx = PendingContext(
                 session_id=self.session_id,
@@ -224,7 +223,7 @@ class NLPProcessor:
         # ----------------------------------------------------
         return {
             "success": False,
-            "message": "I didn't quite catch that. You can say commands like:\n• 'Bought 20 kg rice from Kumar for 800 rupees'\n• 'Sold 5 packets biscuits for 150 rupees'\n• 'Paid 400 for electricity bill'\n• 'Check stock of rice' or 'What is our profit?'",
+            "message": "I didn't catch that. Please repeat what was bought, sold, or spent.",
             "state": ContextState.IDLE,
             "intent": IntentType.UNKNOWN,
             "confidence": 0.20,
@@ -236,13 +235,13 @@ class NLPProcessor:
 
     def _evaluate_and_respond(self, ctx: PendingContext, current_input: str, prefix_message: str = "") -> Dict[str, Any]:
         """
-        Evaluate current context completeness and inventory availability,
+        Evaluate context completeness and inventory stock,
         then determine whether to ask for missing slots or request confirmation.
         """
         from services.inventory_service import InventoryService
         inv_service = InventoryService(db_path=self.db_path)
-        
-        # Check missing slots for the transaction type
+
+        # Identify missing slots
         missing = []
         if ctx.intent in (IntentType.PURCHASE, IntentType.SALE):
             if not ctx.product:
@@ -272,7 +271,7 @@ class NLPProcessor:
         ctx.confidence = conf_score
         ctx.confidence_breakdown = factors
 
-        # If missing information, transition state to slot question
+        # If missing info, ask a concise, direct clarification question
         if missing:
             next_missing = missing[0]
             if next_missing == "product":
@@ -285,10 +284,15 @@ class NLPProcessor:
                 prompt = f"What quantity{prod_name} did you {action_word}?"
             elif next_missing == "amount":
                 ctx.state = ContextState.AWAITING_AMOUNT
-                action_word = "purchase" if ctx.intent == IntentType.PURCHASE else "sale"
-                prompt = f"What was the total {action_word} amount in rupees?"
+                if ctx.intent == IntentType.PURCHASE:
+                    prompt = "What was the purchase price?"
+                elif ctx.intent == IntentType.SALE:
+                    prompt = "What was the selling price?"
+                else:
+                    prompt = "What was the total amount?"
             elif next_missing == "category":
-                prompt = "What is the expense category or description?"
+                ctx.state = ContextState.IDLE
+                prompt = "What was this expense for?"
 
             ctx.last_prompt = prompt
             self.context_mgr.save_context(ctx)
@@ -306,11 +310,11 @@ class NLPProcessor:
                 "requires_confirmation": False
             }
 
-        # If SALE, check stock availability before asking for confirmation!
+        # If SALE, check inventory stock availability before confirmation
         if ctx.intent == IntentType.SALE and ctx.product and ctx.quantity:
             prod_obj = self._get_product_by_name(ctx.product)
             if not prod_obj:
-                msg = f"Product '{ctx.product}' does not exist in inventory. Please add or purchase stock first."
+                msg = f"Product '{ctx.product}' is not in inventory. Please add or purchase stock first."
                 ctx.state = ContextState.IDLE
                 self.context_mgr.save_context(ctx)
                 return {
@@ -324,17 +328,16 @@ class NLPProcessor:
                     "context": ctx.to_dict(),
                     "requires_confirmation": False
                 }
-            
-            # Stock check
+
+            # Negative stock prevention
             if prod_obj.current_stock < ctx.quantity:
-                msg = f"Insufficient stock. Available stock: {prod_obj.current_stock} {prod_obj.unit}, requested: {ctx.quantity} {ctx.unit or prod_obj.unit}."
-                # Keep context open so user can say "Actually change quantity to 5"
+                msg = f"Insufficient stock. Available: {prod_obj.current_stock:g} {prod_obj.unit}, requested: {ctx.quantity:g} {ctx.unit or prod_obj.unit}."
                 ctx.state = ContextState.AWAITING_CONFIRMATION
-                ctx.missing_slots = ["quantity"] # mark quantity as invalid
+                ctx.missing_slots = ["quantity"]
                 self.context_mgr.save_context(ctx)
                 return {
                     "success": False,
-                    "message": f"{msg} Say 'Change quantity to {int(prod_obj.current_stock)}' or 'Cancel'.",
+                    "message": f"{msg} Please specify a different quantity or cancel.",
                     "state": ContextState.AWAITING_CONFIRMATION,
                     "intent": ctx.intent,
                     "confidence": 0.65,
@@ -346,9 +349,9 @@ class NLPProcessor:
                     "available_stock": prod_obj.current_stock
                 }
 
-        # All required fields present and valid! Formulate smart confirmation prompt
+        # All required slots present and valid -> concise confirmation prompt
         ctx.state = ContextState.AWAITING_CONFIRMATION
-        
+
         unit_str = f" {ctx.unit}" if ctx.unit else ""
         if ctx.intent == IntentType.PURCHASE:
             party_str = f" from {ctx.party_name}" if ctx.party_name else ""
@@ -391,7 +394,7 @@ class NLPProcessor:
                     supplier_name=ctx.party_name,
                     notes=ctx.raw_input
                 )
-                success_msg = f"Success! Recorded Purchase of {ctx.quantity:g} {ctx.unit or 'pcs'} {ctx.product} for {Config.CURRENCY_SYMBOL}{ctx.amount:g}. Stock updated: {res['new_stock']} {res['unit']}."
+                success_msg = f"Recorded Purchase: {ctx.quantity:g} {ctx.unit or 'pcs'} {ctx.product} for {Config.CURRENCY_SYMBOL}{ctx.amount:g}. Stock: {res['new_stock']} {res['unit']}."
 
             elif ctx.intent == IntentType.SALE:
                 res = tx_service.record_sale(
@@ -403,7 +406,7 @@ class NLPProcessor:
                     notes=ctx.raw_input
                 )
                 profit_str = f" (Profit: {Config.CURRENCY_SYMBOL}{res['profit']:g})" if res.get('profit') is not None else ""
-                success_msg = f"Success! Recorded Sale of {ctx.quantity:g} {ctx.unit or 'pcs'} {ctx.product} for {Config.CURRENCY_SYMBOL}{ctx.amount:g}{profit_str}. Remaining stock: {res['new_stock']} {res['unit']}."
+                success_msg = f"Recorded Sale: {ctx.quantity:g} {ctx.unit or 'pcs'} {ctx.product} for {Config.CURRENCY_SYMBOL}{ctx.amount:g}{profit_str}. Stock: {res['new_stock']} {res['unit']}."
 
             elif ctx.intent == IntentType.EXPENSE:
                 res = tx_service.record_expense(
@@ -411,12 +414,12 @@ class NLPProcessor:
                     total_amount=ctx.amount,
                     notes=ctx.raw_input
                 )
-                success_msg = f"Success! Recorded Expense of {Config.CURRENCY_SYMBOL}{ctx.amount:g} for '{ctx.category}'."
+                success_msg = f"Recorded Expense: {Config.CURRENCY_SYMBOL}{ctx.amount:g} for '{ctx.category}'."
 
             else:
                 return {
                     "success": False,
-                    "message": f"Unsupported transaction intent: {ctx.intent}",
+                    "message": f"Unsupported transaction type: {ctx.intent}",
                     "state": ContextState.IDLE,
                     "confidence": 0.50,
                     "confidence_status": "LOW",
@@ -425,7 +428,7 @@ class NLPProcessor:
                     "requires_confirmation": False
                 }
 
-            # Transaction successful, reset context to IDLE
+            # Transaction committed successfully -> reset context
             self.context_mgr.reset_context()
 
             return {
@@ -435,7 +438,7 @@ class NLPProcessor:
                 "intent": ctx.intent,
                 "confidence": 0.96,
                 "confidence_status": "HIGH",
-                "confidence_factors": ["Transaction confirmed by user and committed to SQLite"],
+                "confidence_factors": ["Transaction confirmed by user and saved to SQLite"],
                 "context": None,
                 "transaction_data": res,
                 "requires_confirmation": False
@@ -463,13 +466,13 @@ class NLPProcessor:
         if product_name:
             prod = inv_service.find_product_by_name(product_name)
             if prod:
-                status_note = " (LOW STOCK ALERT!)" if prod.current_stock <= prod.min_stock_alert else ""
-                msg = f"Current stock of {prod.name}: {prod.current_stock:g} {prod.unit} (Selling price: {Config.CURRENCY_SYMBOL}{prod.selling_price:g}){status_note}."
+                status_note = " (Low Stock Alert)" if prod.current_stock <= prod.min_stock_alert else ""
+                msg = f"Stock of {prod.name}: {prod.current_stock:g} {prod.unit} (Price: {Config.CURRENCY_SYMBOL}{prod.selling_price:g}){status_note}."
             else:
-                msg = f"Product '{product_name}' was not found in inventory catalog."
+                msg = f"Product '{product_name}' was not found in inventory."
         else:
             summary = inv_service.get_stock_summary()
-            msg = f"Inventory Summary: {summary['total_products']} products in catalog. Total items: {summary['total_items']:g}. Low stock alerts: {summary['low_stock_count']}."
+            msg = f"Inventory Summary: {summary['total_products']} products, {summary['total_items']:g} total items, {summary['low_stock_count']} low stock."
 
         return {
             "success": True,
@@ -488,8 +491,8 @@ class NLPProcessor:
         from services.profit_service import ProfitService
         profit_service = ProfitService(db_path=self.db_path)
         summary = profit_service.get_financial_summary()
-        
-        msg = f"Sales Summary: Total Sales Revenue is {Config.CURRENCY_SYMBOL}{summary['total_sales']:g} across {summary['sales_count']} transactions."
+
+        msg = f"Total Sales: {Config.CURRENCY_SYMBOL}{summary['total_sales']:g} across {summary['sales_count']} transactions."
         return {
             "success": True,
             "message": msg,
@@ -507,10 +510,10 @@ class NLPProcessor:
         from services.profit_service import ProfitService
         profit_service = ProfitService(db_path=self.db_path)
         summary = profit_service.get_financial_summary()
-        
+
         profit = summary['net_profit']
         status_text = "Net Profit" if profit >= 0 else "Net Loss"
-        msg = f"Financial Status: {status_text} is {Config.CURRENCY_SYMBOL}{abs(profit):g} (Sales: {Config.CURRENCY_SYMBOL}{summary['total_sales']:g}, Purchases: {Config.CURRENCY_SYMBOL}{summary['total_purchases']:g}, Expenses: {Config.CURRENCY_SYMBOL}{summary['total_expenses']:g})."
+        msg = f"{status_text}: {Config.CURRENCY_SYMBOL}{abs(profit):g} (Sales: {Config.CURRENCY_SYMBOL}{summary['total_sales']:g}, Purchases: {Config.CURRENCY_SYMBOL}{summary['total_purchases']:g}, Expenses: {Config.CURRENCY_SYMBOL}{summary['total_expenses']:g})."
 
         return {
             "success": True,
@@ -519,7 +522,7 @@ class NLPProcessor:
             "intent": IntentType.PROFIT_QUERY,
             "confidence": 0.94,
             "confidence_status": "HIGH",
-            "confidence_factors": ["Profit calculated: Total Sales - Total Purchases - Total Expenses"],
+            "confidence_factors": ["Profit calculated: Sales - Purchases - Expenses"],
             "context": None,
             "requires_confirmation": False
         }

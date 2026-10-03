@@ -25,7 +25,7 @@ def create_app(config_class=Config):
     # Teardown database connection
     app.teardown_appcontext(close_db)
 
-    # Initialize and seed database if not already done
+    # Initialize and seed database if not already initialized
     with app.app_context():
         init_db()
         seed_database()
@@ -45,8 +45,9 @@ app = create_app()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
+    host = os.environ.get("HOST", "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
     print(f"\n========================================================")
-    print(f" 🎙️  VOICE-BASED SHOP MANAGEMENT SYSTEM (NLP) RUNNING")
-    print(f" 🌐 Access Web UI at: http://127.0.0.1:{port}/")
+    print(f"  VOICE SHOP MANAGEMENT SYSTEM RUNNING")
+    print(f"  Access Web UI at: http://127.0.0.1:{port}/")
     print(f"========================================================\n")
-    app.run(host='127.0.0.1', port=port, debug=True)
+    app.run(host=host, port=port, debug=True)

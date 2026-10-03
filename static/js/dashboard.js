@@ -25,12 +25,13 @@ async function loadDashboardStats() {
         // 1. Update KPI Cards
         const fin = data.financials;
         document.getElementById('kpi-sales').textContent = `₹${fin.total_sales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        document.getElementById('kpi-sales-count').textContent = `${fin.sales_count} sales transactions`;
+        document.getElementById('kpi-sales-count').textContent = `${fin.sales_count} sales`;
 
         document.getElementById('kpi-purchases').textContent = `₹${fin.total_purchases.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        document.getElementById('kpi-purchases-count').textContent = `${fin.purchases_count} purchase batches`;
+        document.getElementById('kpi-purchases-count').textContent = `${fin.purchases_count} purchases`;
 
         document.getElementById('kpi-expenses').textContent = `₹${fin.total_expenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        document.getElementById('kpi-expenses-count').textContent = `${fin.expenses_count} expenses`;
 
         // Net Profit & Badge
         const profitEl = document.getElementById('kpi-net-profit');
@@ -52,7 +53,7 @@ async function loadDashboardStats() {
         // Inventory Stock Valuation
         const inv = data.inventory;
         document.getElementById('kpi-stock-valuation').textContent = `₹${inv.total_valuation.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-        document.getElementById('kpi-inventory-count').textContent = `${inv.total_products} products (${inv.total_items} total units)`;
+        document.getElementById('kpi-inventory-count').textContent = `${inv.total_products} products (${inv.total_items} items)`;
 
         // 2. Render Charts
         renderCharts(data.charts);
@@ -80,28 +81,28 @@ function renderCharts(chartData) {
                 labels: timeline.labels,
                 datasets: [
                     {
-                        label: 'Sales Revenue (₹)',
+                        label: 'Sales (₹)',
                         data: timeline.sales,
-                        backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.8)',
                         borderColor: '#10b981',
                         borderWidth: 1,
-                        borderRadius: 6
+                        borderRadius: 4
                     },
                     {
-                        label: 'Purchases Cost (₹)',
+                        label: 'Purchases (₹)',
                         data: timeline.purchases,
-                        backgroundColor: 'rgba(139, 92, 246, 0.75)',
-                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                        borderColor: '#3b82f6',
                         borderWidth: 1,
-                        borderRadius: 6
+                        borderRadius: 4
                     },
                     {
                         label: 'Expenses (₹)',
                         data: timeline.expenses,
-                        backgroundColor: 'rgba(239, 68, 68, 0.75)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
                         borderColor: '#ef4444',
                         borderWidth: 1,
-                        borderRadius: 6
+                        borderRadius: 4
                     }
                 ]
             },
@@ -110,17 +111,17 @@ function renderCharts(chartData) {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        labels: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans', size: 12 } }
+                        labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } }
                     }
                 },
                 scales: {
                     x: {
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#9ca3af' }
+                        ticks: { color: '#94a3b8' }
                     },
                     y: {
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#9ca3af' }
+                        ticks: { color: '#94a3b8' }
                     }
                 }
             }
@@ -139,7 +140,7 @@ function renderCharts(chartData) {
                 datasets: [{
                     data: categories.values,
                     backgroundColor: [
-                        '#6366f1', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#3b82f6'
+                        '#2563eb', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899', '#64748b'
                     ],
                     borderWidth: 0
                 }]
@@ -150,7 +151,7 @@ function renderCharts(chartData) {
                 plugins: {
                     legend: {
                         position: 'right',
-                        labels: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans', size: 11 }, boxWidth: 14 }
+                        labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, boxWidth: 12 }
                     }
                 },
                 cutout: '65%'

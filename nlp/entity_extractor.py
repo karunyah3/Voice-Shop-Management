@@ -1,20 +1,21 @@
 """
-Entity Extraction Module using Rule-Based Tokenization, Regular Expressions, and Slot Parsing.
-Extracts product, quantity, unit, amount, supplier, customer, category, and correction targets.
+Entity Extraction Module using Robust Natural Language Tokenization, Regular Expressions, and Slot Parsing.
+Extracts product, quantity, unit, amount, supplier, customer, category, and correction targets
+from flexible, natural conversational speech.
 """
 import re
 from typing import Dict, Any, Optional, List, Tuple
 from config import Config
 
-# Word numbers mapping
+# Spoken number word mapping
 WORD_NUMBERS = {
     'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
     'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
     'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
     'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70,
-    'eighty': 80, 'ninety': 90, 'hundred': 100, 'thousand': 1000,
-    'half': 0.5, 'quarter': 0.25, 'a': 1, 'an': 1, 'one and a half': 1.5, 'two and a half': 2.5
+    'eighty': 80, 'ninety': 90, 'hundred': 100, 'thousand': 1000, 'lakh': 100000,
+    'half': 0.5, 'quarter': 0.25, 'a': 1, 'an': 1
 }
 
 # Unit normalizations
@@ -56,137 +57,192 @@ EXPENSE_CATEGORIES = {
     'misc': 'Miscellaneous'
 }
 
-# Known common shop products for keyword fallback
+# Known common shop products for fallback
 COMMON_PRODUCTS = [
-    "rice", "basmati rice", "sugar", "brown sugar", "biscuits", "sunflower oil",
-    "mustard oil", "cooking oil", "oil", "tea powder", "tea", "coffee powder",
-    "coffee", "wheat flour", "atta", "maida", "milk", "butter", "cheese", "paneer",
-    "bath soap", "soap", "detergent", "washing powder", "salt", "black salt",
+    "basmati rice", "rice", "brown sugar", "sugar", "sunflower oil", "mustard oil",
+    "cooking oil", "oil", "tea powder", "tea", "coffee powder", "coffee",
+    "wheat flour", "atta", "maida", "paneer", "cheese", "butter", "milk",
+    "bath soap", "soap", "washing powder", "detergent", "black salt", "salt",
     "toor dal", "moong dal", "chana dal", "dal", "pulses", "shampoo", "toothpaste",
-    "bread", "eggs", "matchbox", "noodles", "maggie", "chips", "cold drink",
-    "spices", "turmeric", "chilli powder", "coriander powder", "garam masala"
+    "biscuits", "biscuit", "bread", "eggs", "egg", "matchbox", "noodles", "maggie",
+    "chips", "cold drink", "turmeric", "chilli powder", "coriander powder", "garam masala",
+    "spices"
 ]
 
+NON_PARTY_WORDS = {
+    'me', 'us', 'him', 'her', 'them', 'my', 'the shop', 'shop', 'supplier',
+    'customer', 'vendor', 'market', 'wholesale', 'today', 'yesterday', 'now',
+    'stock', 'store', 'paid', 'cost', 'bought', 'sold', 'item', 'items', 'goods',
+    'i', 'we', 'you', 'he', 'she', 'they', 'it'
+}
+
 def parse_word_number(text: str) -> Optional[float]:
-    """Parse text that may contain spoken number words (e.g. 'twenty five', 'two and a half')."""
-    cleaned = text.strip().lower()
-    
-    # Direct check
+    """Parse text that may contain spoken number words (e.g. 'twenty five', 'three hundred', 'twenty thousand')."""
+    cleaned = text.strip().lower().rstrip('.!?;:').replace('-', ' ')
+    if not cleaned:
+        return None
+
+    # Handle special fractions
+    if cleaned in ('one and a half', '1 and a half', '1.5'):
+        return 1.5
+    if cleaned in ('two and a half', '2 and a half', '2.5'):
+        return 2.5
+    if cleaned in ('half', 'half a'):
+        return 0.5
+    if cleaned in ('quarter', 'a quarter'):
+        return 0.25
+
+    # Direct single word match
     if cleaned in WORD_NUMBERS:
         return float(WORD_NUMBERS[cleaned])
-        
-    # Compound numbers e.g. "twenty five"
-    words = cleaned.split()
+
+    # Try standard digit parsing
+    try:
+        return float(cleaned.replace(',', ''))
+    except ValueError:
+        pass
+
+    words = [w for w in cleaned.split() if w != 'and']
     total = 0.0
+    current = 0.0
     found_any = False
-    
-    for i, w in enumerate(words):
-        if w in WORD_NUMBERS:
-            val = WORD_NUMBERS[w]
+
+    for w in words:
+        w_clean = w.replace(',', '')
+        val = None
+        try:
+            val = float(w_clean)
+        except ValueError:
+            if w in WORD_NUMBERS:
+                val = float(WORD_NUMBERS[w])
+
+        if val is not None:
             found_any = True
-            if val == 100 or val == 1000:
-                if total == 0:
-                    total = val
-                else:
-                    total *= val
+            if val in (1000, 100000):
+                current = (current if current > 0 else 1) * val
+                total += current
+                current = 0.0
+            elif val == 100:
+                current = (current if current > 0 else 1) * val
             else:
-                total += val
-        elif w == "and":
-            continue
-        else:
-            # Check if digit directly
-            try:
-                val = float(w)
-                found_any = True
-                total += val
-            except ValueError:
-                pass
-                
+                current += val
+
+    total += current
     return total if found_any and total > 0 else None
 
 def extract_amount(text: str) -> Optional[float]:
     """
-    Extract transaction money amount from text.
-    Patterns:
-    - 'for 800 rupees', '₹800', 'rs 800', 'rs. 800', '800 rs', '800 inr', 'for 800', 'amount 800'
+    Extract transaction money amount from natural speech.
+    Supports:
+    - '₹800', 'rs 800', 'rs. 800', 'inr 800', '800 rupees', '800 rs', '20,000'
+    - 'for 800', 'at 800', 'paid 800', 'paid him 800', 'paid Arun 250', 'cost 800', 'cost me 250', 'worth 500'
+    - Spoken numbers: 'three hundred', 'five hundred rupees', 'twenty thousand'
+    - Comma numbers: '20,000', '1,500'
     """
-    cleaned = text.lower()
-    
-    # Pattern 1: Currency symbols / prefixes: ₹800, rs 800, rs. 800, inr 800
-    m = re.search(r'(?:₹|rs\.?|inr)\s*([0-9]+(?:\.[0-9]+)?)', cleaned, re.IGNORECASE)
+    cleaned = text.strip().rstrip('.!?;:')
+
+    # Pattern 1: Currency symbols / prefixes: ₹800, ₹ 20,000, rs 800, rs. 800, inr 800
+    m = re.search(r'(?:₹|rs\.?|inr)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)', cleaned, re.IGNORECASE)
     if m:
         try:
-            return float(m.group(1))
+            return float(m.group(1).replace(',', ''))
         except ValueError:
             pass
 
-    # Pattern 2: Suffix currency: 800 rupees, 800 rs, 800 rps, 800 bucks
-    m = re.search(r'([0-9]+(?:\.[0-9]+)?)\s*(?:rupees|rupee|rs|rps|inr|bucks)', cleaned, re.IGNORECASE)
+    # Pattern 2: Suffix currency: 800 rupees, 20,000 rs, 800 bucks, 250 rupee
+    m = re.search(r'\b([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*(?:rupees|rupee|rs|rps|inr|bucks)\b', cleaned, re.IGNORECASE)
     if m:
         try:
-            return float(m.group(1))
+            return float(m.group(1).replace(',', ''))
         except ValueError:
             pass
 
-    # Pattern 3: 'for 800', 'at 800', 'paid 800', 'amount 800', 'cost 800'
-    m = re.search(r'\b(?:for|at|paid|amount|cost|worth|price)\s+(?:of\s+)?([0-9]+(?:\.[0-9]+)?)\b', cleaned, re.IGNORECASE)
+    # Pattern 3: Prepositions with optional pronoun/name and price:
+    # 'for 250', 'for 20,000', 'paid 250', 'paid him 250', 'paid Arun 250', 'cost 250', 'cost me 250', 'worth 500'
+    m = re.search(r'\b(?:for|at|paid(?:\s+[a-z]+)?|cost(?:\s+[a-z]+)?|worth|price|rate|amount\s+(?:is|of)?)\s+([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\b', cleaned, re.IGNORECASE)
     if m:
         try:
-            return float(m.group(1))
+            return float(m.group(1).replace(',', ''))
         except ValueError:
             pass
 
-    # Pattern 4: When input is just an amount (e.g. answering slot: "800" or "800 rupees")
-    m = re.match(r'^\s*([0-9]+(?:\.[0-9]+)?)\s*$', cleaned)
-    if m:
-        try:
-            return float(m.group(1))
-        except ValueError:
-            pass
-
-    # Word amount: e.g. "for seven hundred rupees", "seven hundred rupees", "paid five hundred"
-    # 1. Prepositional word amount: for/at/worth/paid/cost/amount
-    m = re.search(r'\b(?:for|at|worth|paid|cost|amount\s+of)\s+([a-z\s\-]+?)(?:\s*(?:rupees|rupee|rs|inr|bucks|\.|$))', cleaned)
+    # Pattern 4: Spoken words with currency: "five hundred rupees", "twenty thousand rs", "three hundred rupees"
+    m = re.search(r'\b((?:[a-z\-]+\s*){1,4})\s*(?:rupees|rupee|rs|inr|bucks)\b', cleaned, re.IGNORECASE)
     if m:
         num = parse_word_number(m.group(1))
         if num is not None and num > 0:
             return num
 
-    # 2. Direct word amount preceding currency: "seven hundred rupees" (limit to last 1-4 words)
-    m = re.search(r'((?:[a-z\-]+\s*){1,4})\s*(?:rupees|rupee|rs|inr|bucks)', cleaned)
+    # Pattern 5: Spoken words after price trigger: "paid five hundred", "cost me three hundred", "for two thousand"
+    m = re.search(r'\b(?:for|at|worth|paid(?:\s+[a-z]+)?|cost(?:\s+[a-z]+)?|amount\s+(?:is|of)?)\s+([a-z\s\-]+?)(?:\s*(?:rupees|rupee|rs|inr|bucks|\.|$|,))', cleaned, re.IGNORECASE)
     if m:
         num = parse_word_number(m.group(1))
         if num is not None and num > 0:
             return num
+
+    # Pattern 6: Standalone number at end of comma-separated or speech list (e.g., "Got rice from Arun, five kilos, 300")
+    m = re.search(r'(?:,\s*|\s+)([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*$', cleaned)
+    if m:
+        try:
+            val = float(m.group(1).replace(',', ''))
+            after = cleaned[m.end(1):].strip()
+            unit_words = ('kg', 'kgs', 'kilo', 'kilos', 'gram', 'grams', 'g', 'gm', 'packet', 'packets', 'pkt', 'box', 'boxes', 'piece', 'pieces', 'pcs', 'liter', 'liters', 'litre', 'litres', 'l', 'ml')
+            if not any(after.lower().startswith(u) for u in unit_words):
+                return val
+        except ValueError:
+            pass
+
+    # Pattern 7: Trailing spoken number at end of phrase (e.g. "Got rice from Arun, five kilos, three hundred")
+    m = re.search(r'(?:,\s*|\s+)([a-z\-]+(?:\s+[a-z\-]+)?)\s*$', cleaned, re.IGNORECASE)
+    if m:
+        cand = m.group(1).strip().lower()
+        if cand not in ('rice', 'sugar', 'oil', 'tea', 'atta', 'dal', 'milk', 'arun', 'kumar', 'rahul', 'yes', 'no', 'confirm', 'cancel'):
+            num = parse_word_number(cand)
+            if num is not None and num >= 10:
+                return num
+
+    # Pattern 8: Exact numeric input in slot answering: "250" or "₹250"
+    m = re.match(r'^\s*(?:₹|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*$', cleaned, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1).replace(',', ''))
+        except ValueError:
+            pass
 
     return None
 
 def extract_quantity_and_unit(text: str) -> Tuple[Optional[float], Optional[str]]:
     """
-    Extract quantity number and unit of measurement from text.
-    Example: '20 kg', '5 packets', '10.5 liters', '10 pcs', 'twenty kg', '5'
+    Extract quantity number and unit of measurement from natural speech.
+    Supports:
+    - '500 grams', '500g', '500 gm', '5 kg', '20 kgs', '5 packets', '10.5 liters', '10 pcs'
+    - 'five hundred grams', 'five kilos', '500 kilos', 'twenty kg', 'five packets', 'half kilo'
+    - '1/2 kg', '1.5 kg', '2.5 liters'
     """
-    cleaned = text.lower()
-    unit_regex = r'(kg|kgs|kilograms?|g|grams?|gm|packets?|pkts?|packs?|boxes?|pieces?|pcs|liters?|litres?|ltrs?|l|ml|bottles?|cans?|bags?|cartons?|dozens?)'
-    
-    # Pattern 1: Digit + Unit (e.g. "20 kg", "5 packets", "10.5 liters")
-    m = re.search(rf'([0-9]+(?:\.[0-9]+)?|\d+/\d+)\s*{unit_regex}\b', cleaned, re.IGNORECASE)
+    cleaned = text.lower().strip().rstrip('.!?;:')
+    unit_regex = r'(kg|kgs|kilograms?|kilos?|g|grams?|gm|gms|packets?|pkts?|packs?|boxes?|pieces?|pcs|pc|items?|liters?|litres?|ltrs?|l|ml|milliliters?|bottles?|cans?|bags?|sacks?|cartons?|dozens?)'
+
+    # Pattern 1: Fractions like "1/2 kg", "1/4 kg"
+    m = re.search(rf'(\d+/\d+)\s*{unit_regex}\b', cleaned, re.IGNORECASE)
     if m:
-        raw_qty = m.group(1)
+        raw_frac = m.group(1)
         raw_unit = m.group(2).lower()
-        
-        # Handle fractions like 1/2
-        if '/' in raw_qty:
-            num, denom = raw_qty.split('/')
-            qty = float(num) / float(denom)
-        else:
-            qty = float(raw_qty)
-            
+        num, denom = raw_frac.split('/')
+        qty = float(num) / float(denom)
         unit = UNIT_MAP.get(raw_unit, raw_unit)
         return qty, unit
 
-    # Pattern 2: Spoken number + Unit (e.g. "twenty kg", "five packets")
-    m = re.search(rf'((?:[a-z\-]+\s*){{1,3}})\s+{unit_regex}\b', cleaned, re.IGNORECASE)
+    # Pattern 2: Digit + Unit (e.g. "500 grams", "500g", "5 kg", "20 kgs", "5 packets")
+    m = re.search(rf'([0-9]+(?:\.[0-9]+)?)\s*{unit_regex}\b', cleaned, re.IGNORECASE)
+    if m:
+        raw_qty = m.group(1)
+        raw_unit = m.group(2).lower()
+        qty = float(raw_qty)
+        unit = UNIT_MAP.get(raw_unit, raw_unit)
+        return qty, unit
+
+    # Pattern 3: Spoken number words + Unit (e.g. "five hundred grams", "five kilos", "500 kilos", "twenty kg", "half kilo")
+    m = re.search(rf'\b((?:[a-z\-]+\s*){{1,3}})\s+{unit_regex}\b', cleaned, re.IGNORECASE)
     if m:
         word_num = m.group(1).strip()
         raw_unit = m.group(2).lower()
@@ -195,99 +251,122 @@ def extract_quantity_and_unit(text: str) -> Tuple[Optional[float], Optional[str]
             unit = UNIT_MAP.get(raw_unit, raw_unit)
             return qty, unit
 
-    # Pattern 3: Standalone number in slot filling (e.g. "20" or "5")
-    # Avoid matching amounts if rupees is mentioned
-    if not re.search(r'(rupee|rs|₹|inr)', cleaned):
-        m = re.search(r'\b([0-9]+(?:\.[0-9]+)?)\b', cleaned)
+    # Pattern 4: Standalone number without unit in slot filling (e.g. "20" or "5")
+    if not re.search(r'(rupee|rs|₹|inr|bucks|cost|paid|worth)', cleaned):
+        m = re.search(r'^\s*([0-9]+(?:\.[0-9]+)?)\s*$', cleaned)
         if m:
             qty = float(m.group(1))
             return qty, None
+
+        num = parse_word_number(cleaned)
+        if num is not None:
+            return num, None
 
     return None, None
 
 def extract_party_name(text: str, intent: str = "PURCHASE") -> Optional[str]:
     """
-    Extract supplier or customer name.
-    Purchase: 'from Kumar', 'from Ramesh Agencies'
-    Sale: 'to Rahul', 'to Priya Sharma'
+    Extract supplier or customer name from natural language.
+    Handles:
+    - Prepositional: 'from Arun', 'to Rahul', 'from Ramesh Agencies'
+    - Subject as Supplier: 'Arun supplied me...', 'Arun gave me...', 'Arun sold me...', 'Arun brought...', 'came from Arun'
+    - Subject as Customer: 'Arun bought...', 'Arun took...', 'Arun ordered...', 'Arun purchased...'
     """
     cleaned = text.strip()
-    
-    # Supplier patterns: 'from <Name>' (stop before for/at/rs/rupees/worth)
-    if intent == "PURCHASE" or "from" in cleaned.lower():
-        m = re.search(r'\bfrom\s+([A-Za-z\s\.\'\-]+?)(?=\s+(?:for|at|worth|on|amount|rs|₹|\d|$))', cleaned, re.IGNORECASE)
-        if m:
-            name = m.group(1).strip().strip(".,")
-            # Filter out non-names like 'the shop' or 'supplier'
-            if name and name.lower() not in ['supplier', 'vendor', 'market', 'wholesale']:
-                return name.title()
 
-    # Customer patterns: 'to <Name>' (stop before for/at/rs/rupees/worth)
-    if intent == "SALE" or "to" in cleaned.lower():
-        m = re.search(r'\b(?:to|for customer)\s+([A-Za-z\s\.\'\-]+?)(?=\s+(?:for|at|worth|on|amount|rs|₹|\d|$))', cleaned, re.IGNORECASE)
-        if m:
-            name = m.group(1).strip().strip(".,")
-            if name and name.lower() not in ['customer', 'client', 'buyer']:
-                return name.title()
+    # Pattern 1: Supplier - "from <Name>" (e.g. "bought from Arun", "got sugar from Arun, 500 grams", "came from Arun.")
+    m = re.search(r'\bfrom\s+([A-Za-z\s\.\'\-]+?)(?=\s+(?:for|at|worth|on|paid|cost|amount|rs|₹|\d)|[,;.!?]|$)', cleaned, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip().strip(".,;:!?")
+        if name and name.lower() not in NON_PARTY_WORDS:
+            return name.title()
+
+    # Pattern 2: Supplier as Subject (e.g. "Arun supplied me...", "Arun gave me...", "Arun sold me...", "Arun brought...")
+    m = re.search(r'(?:^|today\s+|yesterday\s+)([A-Za-z]+)\s+(?:supplied|gave(?:\s+me)?|sold(?:\s+me)?|brought|delivered|provided)', cleaned, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip().strip(".,;:!?")
+        if name and name.lower() not in NON_PARTY_WORDS:
+            return name.title()
+
+    # Pattern 3: Customer - "to <Name>" or "for customer <Name>" (e.g. "sold to Rahul", "given to Priya")
+    m = re.search(r'\b(?:to|for\s+customer)\s+([A-Za-z\s\.\'\-]+?)(?=\s+(?:for|at|worth|on|paid|cost|amount|rs|₹|\d)|[,;.!?]|$)', cleaned, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip().strip(".,;:!?")
+        if name and name.lower() not in NON_PARTY_WORDS:
+            return name.title()
+
+    # Pattern 4: Customer as Subject (e.g. "Arun bought 500 rupees worth of sugar", "Rahul took 2 kg rice", "Priya ordered...")
+    m = re.search(r'(?:^|today\s+|yesterday\s+)([A-Za-z]+)\s+(?:bought|purchased|took|ordered|got|wanted|collected)', cleaned, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip().strip(".,;:!?")
+        if name and name.lower() not in NON_PARTY_WORDS and name.lower() not in ('i', 'we', 'he', 'she', 'they'):
+            return name.title()
 
     return None
 
 def extract_expense_category(text: str) -> Tuple[str, Optional[str]]:
     """
     Extract category and description for an expense.
-    E.g. 'paid 500 for shop electricity bill' -> ('Electricity Bill', 'shop electricity bill')
+    E.g. 'paid 500 for shop electricity bill' -> ('Electricity Bill', 'Electricity')
     """
     cleaned = text.lower()
     for keyword, category_name in EXPENSE_CATEGORIES.items():
         if re.search(rf'\b{keyword}\b', cleaned):
             return category_name, keyword.title()
-            
-    # Default fallback
+
     return "Miscellaneous Expense", "Shop Expense"
 
 def extract_product_name(text: str, known_products: List[str] = None) -> Optional[str]:
     """
-    Extract the product name from input text.
-    Combines known product catalog matching with syntactic structural extraction.
+    Extract the product name from natural language.
+    Combines active database catalog matching with syntactic structural extraction.
+    Handles variations:
+    - "500 grams of sugar", "500 grams sugar", "5 kg rice", "sugar from Arun"
+    - "Arun supplied me 500 kilos of rice", "Arun sold me sugar"
+    - "Got rice from Arun, five kilos, three hundred"
+    - "Sugar from Arun, 500 rupees"
     """
-    cleaned = text.lower().strip()
-    
-    # 1. Check against known products from catalog / common products (longest match first)
+    cleaned = text.strip().rstrip('.!?;:')
+    lower = cleaned.lower()
+
+    # 1. Match against known catalog and common product list (longest match first)
     search_list = sorted((known_products or []) + COMMON_PRODUCTS, key=len, reverse=True)
     for p in search_list:
         p_clean = p.lower()
         pattern = rf'\b{re.escape(p_clean)}\b'
-        if re.search(pattern, cleaned):
+        if re.search(pattern, lower):
             return p.title()
 
     # 2. Syntactic Structural Extraction:
-    # "Bought 20 kg [Product] from Kumar for 800"
-    # "Sold 5 packets [Product] for 150"
+    unit_words = r'(?:kg|kgs|kilograms?|kilos?|g|grams?|gm|gms|packets?|pkts?|packs?|boxes?|pieces?|pcs|pc|items?|liters?|litres?|ltrs?|l|ml|bottles?|cans?|bags?|sacks?|cartons?|dozens?)'
+    verb_words = r'(?:bought|buy|purchased|purchase|procured|got|received|supplied|sold|sell|sale|order|ordered|stock\s+of|stock|check|restocked)'
+
     patterns = [
-        # After unit: "20 kg rice for..." / "5 packets biscuits to..."
-        r'(?:kg|kgs|kilograms?|packets?|pkts?|boxes?|pieces?|pcs|liters?|litres?|ml|bottles?|cans?|bags?|cartons?|dozens?)\s+([a-zA-Z\s]{2,30}?)(?=\s+(?:from|to|for|at|worth|amount|rs|₹|\d|$))',
-        # After verb: "bought rice from..." / "sold sugar for..." / "bought sugar"
-        r'\b(?:bought|buy|purchased|purchase|sold|sell|sale|stock of|stock|check)\s+([a-zA-Z\s]{2,30}?)(?=\s+(?:from|to|for|at|worth|amount|rs|₹|\d|$))',
-        # Standalone product name in slot filling: "rice" or "basmati rice"
+        # Pattern A: Quantity + Unit + [of] + Product -> "500 grams of sugar", "20 kg rice", "5 packets biscuits"
+        rf'{unit_words}\s+(?:of\s+)?([a-zA-Z\s]{{2,30}}?)(?=\s+(?:from|to|for|at|worth|paid|cost|amount|rs|₹|\d)|[,;.!?]|$)',
+        # Pattern B: Verb + [me/us] + Product -> "bought sugar", "got rice from Arun", "Arun supplied me rice", "Arun sold me sugar"
+        rf'\b{verb_words}(?:\s+(?:me|us|him|her|them))?\s+(?:of\s+)?([a-zA-Z\s]{{2,30}}?)(?=\s+(?:from|to|for|at|worth|paid|cost|amount|rs|₹|\d)|[,;.!?]|$)',
+        # Pattern C: Fronted product -> "Sugar from Arun, 500 rupees"
+        rf'^\s*([a-zA-Z\s]{{2,30}}?)(?=\s+(?:from|to|for|at|worth|paid|cost|amount|rs|₹|\d|,))',
+        # Pattern D: Standalone product slot response -> "rice" or "basmati rice"
         r'^\s*([a-zA-Z\s]{2,30})\s*$'
     ]
-    
+
     for pat in patterns:
         m = re.search(pat, cleaned, re.IGNORECASE)
         if m:
-            cand = m.group(1).strip()
-            # Filter stop words
-            cand_words = [w for w in cand.split() if w not in ['the', 'a', 'an', 'some', 'of', 'for', 'from', 'to']]
+            cand = m.group(1).strip().strip(".,;:!?")
+            cand_words = [w for w in cand.split() if w.lower() not in ('the', 'a', 'an', 'some', 'of', 'for', 'from', 'to', 'today', 'and', 'worth', 'me', 'us', 'him', 'her')]
             if cand_words:
                 cand_clean = " ".join(cand_words).strip()
-                if len(cand_clean) >= 2:
+                if len(cand_clean) >= 2 and cand_clean.lower() not in NON_PARTY_WORDS:
                     return cand_clean.title()
 
     return None
 
 def extract_correction_target(text: str) -> Dict[str, Any]:
     """
-    Extract target slot and value from correction commands.
+    Extract target slot and new value from natural language correction commands.
     Examples:
     - 'Actually change the quantity to 15 kg'
     - 'Change amount to 750 rupees'
@@ -295,11 +374,11 @@ def extract_correction_target(text: str) -> Dict[str, Any]:
     - 'Make it 10 packets'
     - 'No, price is 500'
     """
-    cleaned = text.lower().strip()
+    cleaned = text.lower().strip().rstrip('.!?;:')
     result = {"target_slot": None, "value": None, "unit": None}
 
-    # Check for quantity correction
-    if re.search(r'\b(quantity|qty|count|number of|packets|kg|liters|pcs)\b', cleaned) or re.search(r'\b(to|make it)\s+\d+\s*(kg|packets|pcs|liters|boxes|g)?', cleaned):
+    # 1. Quantity correction
+    if re.search(r'\b(quantity|qty|count|number of|packets|kg|liters|pcs|boxes|grams)\b', cleaned) or re.search(r'\b(to|make it)\s+\d+\s*(kg|packets|pcs|liters|boxes|g|grams)?', cleaned):
         qty, unit = extract_quantity_and_unit(cleaned)
         if qty is not None:
             result["target_slot"] = "quantity"
@@ -307,7 +386,7 @@ def extract_correction_target(text: str) -> Dict[str, Any]:
             result["unit"] = unit
             return result
 
-    # Check for amount/price correction
+    # 2. Amount / Price correction
     if re.search(r'\b(amount|price|cost|rate|rupees|rs|₹)\b', cleaned):
         amt = extract_amount(cleaned)
         if amt is not None:
@@ -315,7 +394,7 @@ def extract_correction_target(text: str) -> Dict[str, Any]:
             result["value"] = amt
             return result
 
-    # Check for product correction
+    # 3. Product correction
     if re.search(r'\b(product|item|change product to|make product)\b', cleaned):
         prod = extract_product_name(cleaned)
         if prod:
@@ -323,7 +402,7 @@ def extract_correction_target(text: str) -> Dict[str, Any]:
             result["value"] = prod
             return result
 
-    # Check for supplier/customer correction
+    # 4. Supplier / Customer correction
     if re.search(r'\b(supplier|vendor|from|customer|to)\b', cleaned):
         party = extract_party_name(cleaned)
         if party:
@@ -331,7 +410,7 @@ def extract_correction_target(text: str) -> Dict[str, Any]:
             result["value"] = party
             return result
 
-    # General number fallback in correction
+    # Fallback
     amt = extract_amount(cleaned)
     qty, unit = extract_quantity_and_unit(cleaned)
     if unit:
@@ -351,10 +430,10 @@ def extract_all_entities(text: str, intent: str = "PURCHASE", known_products: Li
     amount = extract_amount(text)
     qty, unit = extract_quantity_and_unit(text)
     party_name = extract_party_name(text, intent)
-    
+
     product = None
     category = None
-    
+
     if intent in ("PURCHASE", "SALE", "INVENTORY_QUERY"):
         product = extract_product_name(text, known_products)
     elif intent == "EXPENSE":

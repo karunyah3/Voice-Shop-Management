@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}Inventory & Stock Management{% endblock %}
+{% block title %}Inventory - Voice Shop Management{% endblock %}
 
 {% block content %}
 <div class="inventory-page">
     <div class="page-title-section">
         <div class="title-wrapper">
-            <h1><i class="fa-solid fa-boxes-stacked title-icon"></i> Inventory & Stock Control</h1>
-            <p class="subtitle">Real-time Stock Levels, Unit Pricing, Low Stock Thresholds & Negative Stock Prevention</p>
+            <h1>Inventory Management</h1>
+            <p class="subtitle">Product catalog, current stock levels, and unit prices</p>
         </div>
         <div class="header-actions-group">
             <button class="btn btn-primary btn-sm" id="btn-open-add-product-modal">
                 <i class="fa-solid fa-plus"></i>
-                <span>Add New Product</span>
+                <span>Add Product</span>
             </button>
         </div>
     </div>
@@ -20,15 +20,15 @@
     <!-- Inventory KPIs -->
     <div class="inventory-kpi-row">
         <div class="inv-mini-card">
-            <span class="inv-mini-label">Total Unique Products</span>
+            <span class="inv-mini-label">Total Products</span>
             <span class="inv-mini-val" id="inv-total-products">0</span>
         </div>
         <div class="inv-mini-card">
             <span class="inv-mini-label">Total Stock Count</span>
-            <span class="inv-mini-val" id="inv-total-units">0 units</span>
+            <span class="inv-mini-val" id="inv-total-units">0 items</span>
         </div>
         <div class="inv-mini-card">
-            <span class="inv-mini-label">Total Stock Valuation</span>
+            <span class="inv-mini-label">Stock Valuation</span>
             <span class="inv-mini-val" id="inv-total-valuation">{{ currency }}0.00</span>
         </div>
         <div class="inv-mini-card card-warning-accent">
@@ -42,7 +42,7 @@
         <div class="table-toolbar">
             <div class="search-input-wrapper">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="inventory-search-input" class="form-control" placeholder="Search product by name or category...">
+                <input type="text" id="inventory-search-input" class="form-control" placeholder="Search product name or category...">
             </div>
             <div class="filter-controls">
                 <select id="inventory-category-filter" class="form-select">
@@ -57,9 +57,9 @@
                     <tr>
                         <th>Product Name</th>
                         <th>Category</th>
-                        <th>Current Stock Level</th>
+                        <th>Current Stock</th>
                         <th>Unit</th>
-                        <th>Avg Cost Price</th>
+                        <th>Cost Price</th>
                         <th>Selling Price</th>
                         <th>Profit Margin</th>
                         <th>Status</th>
@@ -80,22 +80,22 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-box-open"></i> Add New Product to Inventory</h3>
+                <h3>Add New Product</h3>
                 <button class="modal-close-btn" id="modal-close-btn">&times;</button>
             </div>
             <form id="add-product-form">
                 <div class="modal-body">
                     <div class="form-group">
                         <label for="prod-name">Product Name *</label>
-                        <input type="text" id="prod-name" class="form-control" placeholder="e.g., Basmati Rice, Sunflower Oil" required>
+                        <input type="text" id="prod-name" class="form-control" placeholder="e.g. Sugar, Basmati Rice" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-half">
                             <label for="prod-category">Category</label>
-                            <input type="text" id="prod-category" class="form-control" placeholder="e.g., Grains, Dairy, Snacks" value="General">
+                            <input type="text" id="prod-category" class="form-control" placeholder="e.g. Grains, Grocery" value="General">
                         </div>
                         <div class="form-group col-half">
-                            <label for="prod-unit">Unit of Measure *</label>
+                            <label for="prod-unit">Unit *</label>
                             <select id="prod-unit" class="form-select" required>
                                 <option value="kg">kg (Kilogram)</option>
                                 <option value="packets" selected>packets</option>
@@ -120,11 +120,11 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group col-half">
-                            <label for="prod-cost">Cost Price per Unit ({{ currency }})</label>
+                            <label for="prod-cost">Cost Price ({{ currency }})</label>
                             <input type="number" id="prod-cost" class="form-control" step="0.5" min="0" value="0">
                         </div>
                         <div class="form-group col-half">
-                            <label for="prod-selling">Selling Price per Unit ({{ currency }})</label>
+                            <label for="prod-selling">Selling Price ({{ currency }})</label>
                             <input type="number" id="prod-selling" class="form-control" step="0.5" min="0" value="0">
                         </div>
                     </div>
@@ -220,34 +220,26 @@
     function renderProducts(products) {
         const tbody = document.getElementById('inventory-tbody');
         if (!products.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No products found matching criteria.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No products found.</td></tr>';
             return;
         }
 
         tbody.innerHTML = products.map(p => {
             const isLow = p.current_stock <= p.min_stock_alert;
             const statusBadge = isLow 
-                ? `<span class="badge badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>`
-                : `<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
+                ? `<span class="badge badge-danger">Low Stock</span>`
+                : `<span class="badge badge-success">In Stock</span>`;
             
             const margin = p.selling_price > 0 && p.cost_price > 0 
                 ? (((p.selling_price - p.cost_price) / p.selling_price) * 100).toFixed(1) + '%'
                 : '--';
-
-            const stockPercent = Math.min(100, Math.max(5, (p.current_stock / (p.min_stock_alert * 3)) * 100));
-            const progressColor = isLow ? 'var(--danger-color)' : 'var(--accent-color)';
 
             return `
                 <tr>
                     <td class="fw-bold">${p.name}</td>
                     <td><span class="category-pill">${p.category}</span></td>
                     <td>
-                        <div class="stock-level-cell">
-                            <span class="stock-num ${isLow ? 'text-danger fw-bold' : ''}">${p.current_stock} ${p.unit}</span>
-                            <div class="mini-progress-bar">
-                                <div class="mini-progress-fill" style="width: ${stockPercent}%; background-color: ${progressColor}"></div>
-                            </div>
-                        </div>
+                        <span class="${isLow ? 'text-danger fw-bold' : ''}">${p.current_stock} ${p.unit}</span>
                     </td>
                     <td>${p.unit}</td>
                     <td>₹${p.cost_price.toFixed(2)}</td>

@@ -5,7 +5,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 class Config:
     """Base configuration for Voice Shop Management application."""
     SECRET_KEY = os.environ.get('SECRET_KEY', 'voice-shop-mgmt-secret-2026')
-    DATABASE_PATH = os.path.join(BASE_DIR, 'database', 'shop.db')
+    DATABASE_PATH = os.environ.get('DATABASE_PATH', os.path.join(BASE_DIR, 'database', 'shop.db'))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Shop Settings
@@ -34,6 +34,6 @@ class Config:
     ]
 
 class TestConfig(Config):
-    """Testing configuration with in-memory or temporary database."""
+    """Testing configuration with temporary database."""
     TESTING = True
     DATABASE_PATH = os.path.join(BASE_DIR, 'database', 'test_shop.db')

@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}Transaction Ledger & History{% endblock %}
+{% block title %}Transactions - Voice Shop Management{% endblock %}
 
 {% block content %}
 <div class="transactions-page">
     <div class="page-title-section">
         <div class="title-wrapper">
-            <h1><i class="fa-solid fa-receipt title-icon"></i> Shop Transaction Ledger</h1>
-            <p class="subtitle">Complete Audit History of Purchases, Sales, Expenses & Profit Calculations</p>
+            <h1>Transaction Ledger</h1>
+            <p class="subtitle">Audit log of all recorded purchases, sales, and overhead expenses</p>
         </div>
         <div class="header-actions-group">
             <button class="btn btn-secondary btn-sm" id="btn-open-manual-tx-modal">
-                <i class="fa-solid fa-pen"></i>
-                <span>Manual Entry Fallback</span>
+                <i class="fa-solid fa-plus"></i>
+                <span>Manual Entry</span>
             </button>
         </div>
     </div>
@@ -21,14 +21,14 @@
     <div class="card filter-card">
         <div class="table-toolbar">
             <div class="type-filter-tabs">
-                <button class="filter-tab active" data-type="">All Transactions</button>
-                <button class="filter-tab" data-type="PURCHASE"><i class="fa-solid fa-cart-flatbed"></i> Purchases</button>
-                <button class="filter-tab" data-type="SALE"><i class="fa-solid fa-cash-register"></i> Sales</button>
-                <button class="filter-tab" data-type="EXPENSE"><i class="fa-solid fa-receipt"></i> Expenses</button>
+                <button class="filter-tab active" data-type="">All</button>
+                <button class="filter-tab" data-type="PURCHASE">Purchases</button>
+                <button class="filter-tab" data-type="SALE">Sales</button>
+                <button class="filter-tab" data-type="EXPENSE">Expenses</button>
             </div>
             <div class="search-input-wrapper">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="tx-search-input" class="form-control" placeholder="Search by item, party name, or notes...">
+                <input type="text" id="tx-search-input" class="form-control" placeholder="Search product, party, or notes...">
             </div>
         </div>
     </div>
@@ -42,19 +42,19 @@
                         <th>ID</th>
                         <th>Type</th>
                         <th>Product / Category</th>
-                        <th>Quantity & Unit</th>
-                        <th>Unit Rate</th>
+                        <th>Quantity</th>
+                        <th>Rate</th>
                         <th>Total Amount</th>
                         <th>Party (Supplier / Customer)</th>
                         <th>Profit</th>
-                        <th>Voice Command / Notes</th>
-                        <th>Timestamp</th>
+                        <th>Notes / Speech</th>
+                        <th>Date & Time</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="transactions-tbody">
                     <tr>
-                        <td colspan="11" class="text-center text-muted">Loading transaction records...</td>
+                        <td colspan="11" class="text-center text-muted">Loading transactions...</td>
                     </tr>
                 </tbody>
             </table>
@@ -67,7 +67,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-pen-to-square"></i> Record Manual Transaction</h3>
+                <h3>Record Manual Transaction</h3>
                 <button class="modal-close-btn" id="modal-close-tx-btn">&times;</button>
             </div>
             <form id="manual-tx-form">
@@ -85,7 +85,7 @@
                     <div id="product-specific-fields">
                         <div class="form-group">
                             <label for="manual-product-name">Product Name *</label>
-                            <input type="text" id="manual-product-name" class="form-control" placeholder="e.g. Rice, Sugar, Biscuits">
+                            <input type="text" id="manual-product-name" class="form-control" placeholder="e.g. Sugar, Rice">
                         </div>
                         <div class="form-row">
                             <div class="form-group col-half">
@@ -120,14 +120,14 @@
                             <input type="number" id="manual-amount" class="form-control" step="0.5" min="1" required>
                         </div>
                         <div class="form-group col-half" id="party-name-group">
-                            <label for="manual-party">Supplier / Customer Name</label>
-                            <input type="text" id="manual-party" class="form-control" placeholder="e.g. Kumar / Rahul">
+                            <label for="manual-party">Supplier / Customer</label>
+                            <input type="text" id="manual-party" class="form-control" placeholder="e.g. Arun / Rahul">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="manual-notes">Notes / Remarks</label>
-                        <input type="text" id="manual-notes" class="form-control" placeholder="Manual transaction note">
+                        <label for="manual-notes">Notes</label>
+                        <input type="text" id="manual-notes" class="form-control" placeholder="Optional notes">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -207,7 +207,7 @@
                 });
                 const result = await res.json();
                 if (result.success) {
-                    showToast('Transaction recorded successfully!', 'success');
+                    showToast('Transaction recorded!', 'success');
                     modal.style.display = 'none';
                     document.getElementById('manual-tx-form').reset();
                     loadTransactionsTable();
@@ -238,7 +238,7 @@
     function renderTransactions(txs) {
         const tbody = document.getElementById('transactions-tbody');
         if (!txs.length) {
-            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No transactions found matching criteria.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No transactions found.</td></tr>';
             return;
         }
 
@@ -252,7 +252,7 @@
             const qtyDisplay = t.quantity ? `${t.quantity} ${t.unit || ''}` : '--';
             const rateDisplay = t.unit_price ? `₹${t.unit_price.toFixed(2)}` : '--';
             const profitDisplay = t.type === 'SALE' 
-                ? `<span class="profit-val ${t.profit >= 0 ? 'text-success' : 'text-danger'}">+₹${t.profit.toFixed(2)}</span>`
+                ? `<span class="${t.profit >= 0 ? 'text-success fw-bold' : 'text-danger fw-bold'}">+₹${t.profit.toFixed(2)}</span>`
                 : '--';
 
             return `
@@ -265,10 +265,10 @@
                     <td class="fw-bold">₹${t.total_amount.toFixed(2)}</td>
                     <td>${t.party_name || '--'}</td>
                     <td>${profitDisplay}</td>
-                    <td><span class="notes-truncate" title="${t.notes || ''}">${t.notes || '--'}</span></td>
+                    <td><span title="${t.notes || ''}">${t.notes || '--'}</span></td>
                     <td class="text-muted small">${t.created_at || 'Just now'}</td>
                     <td>
-                        <button class="btn btn-outline btn-xs text-danger" onclick="deleteTx(${t.id})" title="Delete Transaction">
+                        <button class="btn btn-outline btn-xs text-danger" onclick="deleteTx(${t.id})" title="Delete">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </td>
@@ -278,7 +278,7 @@
     }
 
     async function deleteTx(id) {
-        if (!confirm(`Are you sure you want to delete transaction #${id}?`)) return;
+        if (!confirm(`Delete transaction #${id}?`)) return;
         try {
             const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
             const result = await res.json();

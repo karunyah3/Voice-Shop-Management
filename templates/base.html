@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Voice Shop Management{% endblock %} - Academic NLP Prototype</title>
-    <!-- Google Fonts -->
+    <title>{% block title %}Voice Shop Management{% endblock %}</title>
+    <!-- Modern Clean Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <!-- Chart.js for visualizations -->
+    <!-- Chart.js for reports -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Custom CSS -->
+    <!-- Application CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -21,24 +21,15 @@
         <div class="header-container">
             <div class="brand">
                 <a href="/" class="brand-link">
-                    <div class="brand-icon">
-                        <i class="fa-solid fa-microphone-lines"></i>
-                    </div>
-                    <div class="brand-info">
-                        <span class="brand-title">VoiceShop<span class="highlight">NLP</span></span>
-                        <span class="brand-subtitle">Explainable Academic Assistant</span>
-                    </div>
+                    <i class="fa-solid fa-store brand-icon"></i>
+                    <span class="brand-title">Voice Shop Management</span>
                 </a>
             </div>
 
             <nav class="nav-links">
                 <a href="/" class="nav-item {% if active_page == 'voice' %}active{% endif %}" id="nav-voice">
-                    <i class="fa-solid fa-headset"></i>
-                    <span>Voice Assistant</span>
-                </a>
-                <a href="/dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard">
-                    <i class="fa-solid fa-chart-pie"></i>
-                    <span>Dashboard</span>
+                    <i class="fa-solid fa-microphone"></i>
+                    <span>Voice Input</span>
                 </a>
                 <a href="/inventory" class="nav-item {% if active_page == 'inventory' %}active{% endif %}" id="nav-inventory">
                     <i class="fa-solid fa-boxes-stacked"></i>
@@ -48,6 +39,10 @@
                     <i class="fa-solid fa-receipt"></i>
                     <span>Transactions</span>
                 </a>
+                <a href="/dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Reports & Dashboard</span>
+                </a>
             </nav>
 
             <div class="header-actions">
@@ -55,9 +50,9 @@
                     <span class="status-dot"></span>
                     <span class="status-text">Voice Ready</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" id="btn-reset-demo" title="Reset sample shop inventory and transactions for demonstration">
+                <button class="btn btn-outline btn-sm" id="btn-reset-demo" title="Reset sample database to default state">
                     <i class="fa-solid fa-rotate-left"></i>
-                    <span>Reset Demo</span>
+                    <span>Reset Data</span>
                 </button>
             </div>
         </div>

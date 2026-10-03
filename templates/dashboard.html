@@ -1,92 +1,67 @@
 {% extends 'base.html' %}
 
-{% block title %}Shop Financial & Analytics Dashboard{% endblock %}
+{% block title %}Reports & Dashboard - Voice Shop Management{% endblock %}
 
 {% block content %}
 <div class="dashboard-page">
     <div class="page-title-section">
         <div class="title-wrapper">
-            <h1><i class="fa-solid fa-chart-line title-icon"></i> Shop Financial Dashboard</h1>
-            <p class="subtitle">Live Revenue, Operating Expenses, Inventory Valuation & Net Profit/Loss Tracking</p>
+            <h1>Reports & Financial Overview</h1>
+            <p class="subtitle">Live revenue, purchases, expenses, and net profit calculations</p>
         </div>
         <div class="header-actions-group">
             <button class="btn btn-secondary btn-sm" id="btn-refresh-dashboard">
                 <i class="fa-solid fa-arrows-rotate"></i>
-                <span>Refresh Live Data</span>
+                <span>Refresh</span>
             </button>
         </div>
     </div>
 
     <!-- KPI Metric Cards Grid -->
     <div class="kpi-grid">
-        <!-- Card 1: Total Sales -->
-        <div class="kpi-card kpi-sales">
-            <div class="kpi-icon-wrapper">
-                <i class="fa-solid fa-arrow-trend-up"></i>
-            </div>
-            <div class="kpi-content">
-                <span class="kpi-label">Total Sales Revenue</span>
-                <h2 class="kpi-value" id="kpi-sales">{{ currency }}0.00</h2>
-                <div class="kpi-footer">
-                    <span class="kpi-subtext" id="kpi-sales-count">0 transactions</span>
-                </div>
+        <!-- Total Sales -->
+        <div class="kpi-card">
+            <span class="kpi-label">Total Sales</span>
+            <span class="kpi-value text-success" id="kpi-sales">{{ currency }}0.00</span>
+            <div class="kpi-footer">
+                <span id="kpi-sales-count">0 sales</span>
             </div>
         </div>
 
-        <!-- Card 2: Total Purchases -->
-        <div class="kpi-card kpi-purchases">
-            <div class="kpi-icon-wrapper">
-                <i class="fa-solid fa-cart-flatbed"></i>
-            </div>
-            <div class="kpi-content">
-                <span class="kpi-label">Total Purchases (Stock Cost)</span>
-                <h2 class="kpi-value" id="kpi-purchases">{{ currency }}0.00</h2>
-                <div class="kpi-footer">
-                    <span class="kpi-subtext" id="kpi-purchases-count">0 purchases</span>
-                </div>
+        <!-- Total Purchases -->
+        <div class="kpi-card">
+            <span class="kpi-label">Total Purchases</span>
+            <span class="kpi-value text-primary" id="kpi-purchases">{{ currency }}0.00</span>
+            <div class="kpi-footer">
+                <span id="kpi-purchases-count">0 purchases</span>
             </div>
         </div>
 
-        <!-- Card 3: Total Expenses -->
-        <div class="kpi-card kpi-expenses">
-            <div class="kpi-icon-wrapper">
-                <i class="fa-solid fa-receipt"></i>
-            </div>
-            <div class="kpi-content">
-                <span class="kpi-label">Total Overhead Expenses</span>
-                <h2 class="kpi-value" id="kpi-expenses">{{ currency }}0.00</h2>
-                <div class="kpi-footer">
-                    <span class="kpi-subtext" id="kpi-expenses-count">Rent, Bills, Refreshments</span>
-                </div>
+        <!-- Total Expenses -->
+        <div class="kpi-card">
+            <span class="kpi-label">Overhead Expenses</span>
+            <span class="kpi-value text-danger" id="kpi-expenses">{{ currency }}0.00</span>
+            <div class="kpi-footer">
+                <span id="kpi-expenses-count">0 expenses</span>
             </div>
         </div>
 
-        <!-- Card 4: Net Profit / Loss -->
-        <div class="kpi-card kpi-profit" id="kpi-profit-card">
-            <div class="kpi-icon-wrapper">
-                <i class="fa-solid fa-scale-balanced"></i>
-            </div>
-            <div class="kpi-content">
-                <span class="kpi-label">Overall Net Profit / Loss</span>
-                <h2 class="kpi-value" id="kpi-net-profit">{{ currency }}0.00</h2>
-                <div class="kpi-footer">
-                    <span class="badge badge-success" id="kpi-profit-badge">Net Profit</span>
-                    <span class="kpi-subtext" id="kpi-margin-text">Margin: 0.0%</span>
-                </div>
+        <!-- Net Profit / Loss -->
+        <div class="kpi-card" id="kpi-profit-card">
+            <span class="kpi-label">Net Profit / Loss</span>
+            <span class="kpi-value" id="kpi-net-profit">{{ currency }}0.00</span>
+            <div class="kpi-footer">
+                <span class="badge badge-success" id="kpi-profit-badge">Net Profit</span>
+                <span id="kpi-margin-text">Margin: 0.0%</span>
             </div>
         </div>
 
-        <!-- Card 5: Inventory Valuation -->
-        <div class="kpi-card kpi-inventory">
-            <div class="kpi-icon-wrapper">
-                <i class="fa-solid fa-boxes-stacked"></i>
-            </div>
-            <div class="kpi-content">
-                <span class="kpi-label">Current Stock Valuation</span>
-                <h2 class="kpi-value" id="kpi-stock-valuation">{{ currency }}0.00</h2>
-                <div class="kpi-footer">
-                    <span class="kpi-subtext" id="kpi-inventory-count">0 catalog items</span>
-                </div>
+        <!-- Inventory Valuation -->
+        <div class="kpi-card">
+            <span class="kpi-label">Stock Valuation</span>
+            <span class="kpi-value" id="kpi-stock-valuation">{{ currency }}0.00</span>
+            <div class="kpi-footer">
+                <span id="kpi-inventory-count">0 items</span>
             </div>
         </div>
     </div>
@@ -97,7 +72,7 @@
             <div class="card-header">
                 <div class="card-title">
                     <i class="fa-solid fa-chart-area"></i>
-                    <span>Financial Timeline (Sales vs Purchases vs Expenses)</span>
+                    <span>Financial Timeline</span>
                 </div>
             </div>
             <div class="chart-wrapper">
@@ -109,7 +84,7 @@
             <div class="card-header">
                 <div class="card-title">
                     <i class="fa-solid fa-chart-pie"></i>
-                    <span>Sales Distribution by Category</span>
+                    <span>Sales by Category</span>
                 </div>
             </div>
             <div class="chart-wrapper">
@@ -123,10 +98,10 @@
         <div class="card-header">
             <div class="card-title">
                 <i class="fa-solid fa-clock-rotate-left"></i>
-                <span>Recent Shop Transactions</span>
+                <span>Recent Transactions</span>
             </div>
             <a href="/transactions" class="btn btn-outline btn-xs">
-                <span>View Full Ledger</span>
+                <span>View All</span>
                 <i class="fa-solid fa-arrow-right"></i>
             </a>
         </div>
@@ -137,7 +112,7 @@
                         <th>ID</th>
                         <th>Type</th>
                         <th>Product / Category</th>
-                        <th>Quantity & Unit</th>
+                        <th>Quantity</th>
                         <th>Total Amount</th>
                         <th>Party / Notes</th>
                         <th>Date & Time</th>
@@ -145,7 +120,7 @@
                 </thead>
                 <tbody id="dashboard-recent-tbody">
                     <tr>
-                        <td colspan="7" class="text-center text-muted">Loading live transactions...</td>
+                        <td colspan="7" class="text-center text-muted">Loading transactions...</td>
                     </tr>
                 </tbody>
             </table>

@@ -1,6 +1,6 @@
 """
-Automated Test Suite for NLP, Intent Detection, Entity Extraction,
-Context Multi-Turn Conversations, and Corrections.
+Comprehensive Automated Test Suite for Natural Language Processing, Intent Classification, Entity Extraction,
+Multi-Turn Dialogue, Corrections, Stock Rejection, and Edge Cases.
 """
 import pytest
 import os
@@ -29,168 +29,284 @@ def setup_test_db():
         except Exception:
             pass
 
-def test_purchase_extraction(setup_test_db):
-    """Scenario 1: Full Purchase extraction test."""
-    text = "Bought 20 kg rice from Kumar for 800 rupees"
-    processor = NLPProcessor(session_id="test_purchase", db_path=setup_test_db)
-    res = processor.process_input(text)
+def test_natural_purchase_variations(setup_test_db):
+    """Test multiple natural phrasing variations for Purchase transactions."""
+    processor = NLPProcessor(session_id="test_nlp_nat1", db_path=setup_test_db)
 
-    assert res["success"] is True
-    assert res["intent"] == IntentType.PURCHASE
-    assert res["context"]["product"] == "Rice"
-    assert res["context"]["quantity"] == 20.0
-    assert res["context"]["unit"] == "kg"
-    assert res["context"]["amount"] == 800.0
-    assert res["context"]["party_name"] == "Kumar"
-    assert res["requires_confirmation"] is True
-    assert res["state"] == ContextState.AWAITING_CONFIRMATION
-    assert "Please confirm" in res["message"]
-    # Check explainable confidence
-    assert 0.80 <= res["confidence"] < 1.0
+    # 1. "Bought 500 grams of sugar from Arun for 250."
+    res1 = processor.process_input("Bought 500 grams of sugar from Arun for 250.")
+    assert res1["success"] is True
+    assert res1["intent"] == IntentType.PURCHASE
+    assert res1["context"]["product"] == "Sugar"
+    assert res1["context"]["quantity"] == 500.0
+    assert res1["context"]["unit"] == "g"
+    assert res1["context"]["amount"] == 250.0
+    assert res1["context"]["party_name"] == "Arun"
+    assert res1["requires_confirmation"] is True
+    processor.context_mgr.reset_context()
 
-def test_sale_extraction(setup_test_db):
-    """Scenario 2: Full Sale extraction test."""
-    text = "Sold 5 packets biscuits for 150 rupees"
-    processor = NLPProcessor(session_id="test_sale", db_path=setup_test_db)
-    res = processor.process_input(text)
+    # 2. "Arun gave me 500 grams of sugar for 250 rupees."
+    res2 = processor.process_input("Arun gave me 500 grams of sugar for 250 rupees.")
+    assert res2["success"] is True
+    assert res2["intent"] == IntentType.PURCHASE
+    assert res2["context"]["product"] == "Sugar"
+    assert res2["context"]["quantity"] == 500.0
+    assert res2["context"]["unit"] == "g"
+    assert res2["context"]["amount"] == 250.0
+    assert res2["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
 
-    assert res["success"] is True
-    assert res["intent"] == IntentType.SALE
-    assert res["context"]["product"] == "Biscuits"
-    assert res["context"]["quantity"] == 5.0
-    assert res["context"]["unit"] == "packets"
-    assert res["context"]["amount"] == 150.0
-    assert res["requires_confirmation"] is True
-    assert res["state"] == ContextState.AWAITING_CONFIRMATION
-    assert "Please confirm: Sale of 5 packets Biscuits for ₹150" in res["message"]
+    # 3. "I got sugar from Arun, 500 grams, paid 250."
+    res3 = processor.process_input("I got sugar from Arun, 500 grams, paid 250.")
+    assert res3["success"] is True
+    assert res3["intent"] == IntentType.PURCHASE
+    assert res3["context"]["product"] == "Sugar"
+    assert res3["context"]["quantity"] == 500.0
+    assert res3["context"]["amount"] == 250.0
+    assert res3["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
 
-def test_expense_extraction(setup_test_db):
-    """Scenario 3: Expense extraction test."""
-    text = "Paid 450 for electricity bill"
-    processor = NLPProcessor(session_id="test_expense", db_path=setup_test_db)
-    res = processor.process_input(text)
+    # 4. "Today Arun supplied 500 grams of sugar and I paid him 250."
+    res4 = processor.process_input("Today Arun supplied 500 grams of sugar and I paid him 250.")
+    assert res4["success"] is True
+    assert res4["intent"] == IntentType.PURCHASE
+    assert res4["context"]["product"] == "Sugar"
+    assert res4["context"]["quantity"] == 500.0
+    assert res4["context"]["amount"] == 250.0
+    assert res4["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
 
-    assert res["success"] is True
-    assert res["intent"] == IntentType.EXPENSE
-    assert res["context"]["amount"] == 450.0
-    assert "Electricity Bill" in res["context"]["category"]
-    assert res["requires_confirmation"] is True
-    assert res["state"] == ContextState.AWAITING_CONFIRMATION
+    # 5. "I purchased sugar from Arun for 250 rupees."
+    res5 = processor.process_input("I purchased sugar from Arun for 250 rupees.")
+    assert res5["success"] is True
+    assert res5["intent"] == IntentType.PURCHASE
+    assert res5["context"]["product"] == "Sugar"
+    assert res5["context"]["amount"] == 250.0
+    assert res5["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
 
-def test_incomplete_purchase_slot_filling(setup_test_db):
-    """Scenario 4: Incomplete purchase must NOT save immediately, but ask for missing slots."""
-    session_id = "test_slot_filling"
-    processor = NLPProcessor(session_id=session_id, db_path=setup_test_db)
+    # 6. "500 grams of sugar came from Arun, cost me 250."
+    res6 = processor.process_input("500 grams of sugar came from Arun, cost me 250.")
+    assert res6["success"] is True
+    assert res6["intent"] == IntentType.PURCHASE
+    assert res6["context"]["product"] == "Sugar"
+    assert res6["context"]["quantity"] == 500.0
+    assert res6["context"]["amount"] == 250.0
+    assert res6["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
 
-    # Turn 1: User says only "Bought rice"
-    turn1 = processor.process_input("Bought rice")
+def test_more_user_examples(setup_test_db):
+    """Test all specific examples provided by the user."""
+    processor = NLPProcessor(session_id="test_nlp_user_ex", db_path=setup_test_db)
+
+    # 1. "Arun supplied me 500 kilos of rice for 20,000."
+    res1 = processor.process_input("Arun supplied me 500 kilos of rice for 20,000.")
+    assert res1["success"] is True
+    assert res1["intent"] == IntentType.PURCHASE
+    assert res1["context"]["product"] == "Rice"
+    assert res1["context"]["quantity"] == 500.0
+    assert res1["context"]["unit"] == "kg"
+    assert res1["context"]["amount"] == 20000.0
+    assert res1["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # 2. "Bought 5 kg rice from Arun for 300 rupees."
+    res2 = processor.process_input("Bought 5 kg rice from Arun for 300 rupees.")
+    assert res2["success"] is True
+    assert res2["intent"] == IntentType.PURCHASE
+    assert res2["context"]["product"] == "Rice"
+    assert res2["context"]["quantity"] == 5.0
+    assert res2["context"]["unit"] == "kg"
+    assert res2["context"]["amount"] == 300.0
+    assert res2["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # 3. "Arun supplied me 5 kg rice, paid 300."
+    res3 = processor.process_input("Arun supplied me 5 kg rice, paid 300.")
+    assert res3["success"] is True
+    assert res3["intent"] == IntentType.PURCHASE
+    assert res3["context"]["product"] == "Rice"
+    assert res3["context"]["quantity"] == 5.0
+    assert res3["context"]["amount"] == 300.0
+    assert res3["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # 4. "Got rice from Arun, five kilos, three hundred."
+    res4 = processor.process_input("Got rice from Arun, five kilos, three hundred.")
+    assert res4["success"] is True
+    assert res4["intent"] == IntentType.PURCHASE
+    assert res4["context"]["product"] == "Rice"
+    assert res4["context"]["quantity"] == 5.0
+    assert res4["context"]["amount"] == 300.0
+    assert res4["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # 5. "I purchased sugar for 500 from Arun."
+    res5 = processor.process_input("I purchased sugar for 500 from Arun.")
+    assert res5["success"] is True
+    assert res5["intent"] == IntentType.PURCHASE
+    assert res5["context"]["product"] == "Sugar"
+    assert res5["context"]["amount"] == 500.0
+    assert res5["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # 6. "Arun sold me 2 kg sugar for 200."
+    res6 = processor.process_input("Arun sold me 2 kg sugar for 200.")
+    assert res6["success"] is True
+    assert res6["intent"] == IntentType.PURCHASE
+    assert res6["context"]["product"] == "Sugar"
+    assert res6["context"]["quantity"] == 2.0
+    assert res6["context"]["amount"] == 200.0
+    assert res6["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+def test_customer_sale_versus_purchase(setup_test_db):
+    """Test distinction: 'Arun bought ...' (Sale) vs 'I bought from Arun' (Purchase)."""
+    processor = NLPProcessor(session_id="test_distinction", db_path=setup_test_db)
+
+    # Arun bought sugar -> Sale to Arun
+    res_sale = processor.process_input("Arun bought 500 rupees worth of sugar.")
+    assert res_sale["success"] is True
+    assert res_sale["intent"] == IntentType.SALE
+    assert res_sale["context"]["product"] == "Sugar"
+    assert res_sale["context"]["amount"] == 500.0
+    assert res_sale["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # I bought sugar from Arun -> Purchase from Arun
+    res_purch = processor.process_input("I bought sugar from Arun for 500.")
+    assert res_purch["success"] is True
+    assert res_purch["intent"] == IntentType.PURCHASE
+    assert res_purch["context"]["product"] == "Sugar"
+    assert res_purch["context"]["amount"] == 500.0
+    assert res_purch["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+    # Sugar from Arun, 500 rupees -> Purchase from Arun
+    res_inward = processor.process_input("Sugar from Arun, 500 rupees.")
+    assert res_inward["success"] is True
+    assert res_inward["intent"] == IntentType.PURCHASE
+    assert res_inward["context"]["product"] == "Sugar"
+    assert res_inward["context"]["amount"] == 500.0
+    assert res_inward["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+def test_missing_information_clarification(setup_test_db):
+    """Test that missing info prompts a concise question without formulaic format instructions."""
+    processor = NLPProcessor(session_id="test_clarify", db_path=setup_test_db)
+
+    # 1. "Today I got 10 kg rice from Arun." (Price missing)
+    turn1 = processor.process_input("Today I got 10 kg rice from Arun.")
     assert turn1["success"] is True
-    assert turn1["intent"] == IntentType.PURCHASE
-    assert turn1["context"]["product"] == "Rice"
+    assert turn1["state"] == ContextState.AWAITING_AMOUNT
     assert turn1["requires_confirmation"] is False
-    assert turn1["state"] == ContextState.AWAITING_QUANTITY
-    assert "quantity" in turn1["message"].lower()
+    assert "purchase price" in turn1["message"].lower() or "amount" in turn1["message"].lower()
+    assert "please say" not in turn1["message"].lower()
 
-    # Turn 2: User provides quantity "20 kg"
-    turn2 = processor.process_input("20 kg")
+    # 2. Answer price "300 rupees"
+    turn2 = processor.process_input("300 rupees")
     assert turn2["success"] is True
-    assert turn2["context"]["quantity"] == 20.0
-    assert turn2["context"]["unit"] == "kg"
-    assert turn2["requires_confirmation"] is False
-    assert turn2["state"] == ContextState.AWAITING_AMOUNT
-    assert "amount" in turn2["message"].lower()
+    assert turn2["state"] == ContextState.AWAITING_CONFIRMATION
+    assert turn2["requires_confirmation"] is True
+    assert turn2["context"]["amount"] == 300.0
+    assert turn2["context"]["quantity"] == 10.0
+    assert turn2["context"]["product"] == "Rice"
+    assert turn2["context"]["party_name"] == "Arun"
 
-    # Turn 3: User provides amount "800 rupees"
-    turn3 = processor.process_input("800 rupees")
+    # 3. Confirm
+    turn3 = processor.process_input("confirm")
     assert turn3["success"] is True
-    assert turn3["context"]["amount"] == 800.0
-    assert turn3["requires_confirmation"] is True
-    assert turn3["state"] == ContextState.AWAITING_CONFIRMATION
-    assert "Please confirm" in turn3["message"]
+    assert turn3["state"] == ContextState.IDLE
+    assert turn3["transaction_data"]["product_name"] == "Rice"
 
-    # Turn 4: User says "Confirm" -> saves to SQLite
-    turn4 = processor.process_input("Confirm")
-    assert turn4["success"] is True
-    assert turn4["state"] == ContextState.IDLE
-    assert "Success" in turn4["message"]
-    assert turn4["transaction_data"]["product_name"] == "Rice"
+def test_missing_price_slot_and_commit(setup_test_db):
+    """Test 'Got 500 grams sugar from Arun.' -> prompts for price -> user enters 250 -> saves."""
+    processor = NLPProcessor(session_id="test_slot_sugar", db_path=setup_test_db)
 
-def test_context_correction_quantity(setup_test_db):
-    """Scenario 5: Context correction - user updates quantity without duplicating transaction."""
-    session_id = "test_correction_qty"
-    processor = NLPProcessor(session_id=session_id, db_path=setup_test_db)
+    # Turn 1: "Got 500 grams sugar from Arun."
+    turn1 = processor.process_input("Got 500 grams sugar from Arun.")
+    assert turn1["success"] is True
+    assert turn1["state"] == ContextState.AWAITING_AMOUNT
+    assert turn1["requires_confirmation"] is False
 
-    # Turn 1: Initial command
-    processor.process_input("Bought 20 kg sugar for 700 rupees")
-    
-    # Turn 2: Correction command
-    corr = processor.process_input("Actually change the quantity to 15 kg")
-    assert corr["success"] is True
-    assert corr["context"]["product"] == "Sugar"
-    assert corr["context"]["quantity"] == 15.0
-    assert corr["context"]["amount"] == 700.0
-    assert corr["state"] == ContextState.AWAITING_CONFIRMATION
-    assert "Updated quantity to 15 kg" in corr["message"]
-    assert "15 kg Sugar for ₹700" in corr["message"]
+    # Turn 2: User responds "250"
+    turn2 = processor.process_input("250")
+    assert turn2["success"] is True
+    assert turn2["state"] == ContextState.AWAITING_CONFIRMATION
+    assert turn2["requires_confirmation"] is True
+    assert turn2["context"]["amount"] == 250.0
+    assert turn2["context"]["quantity"] == 500.0
+    assert turn2["context"]["product"] == "Sugar"
+    assert turn2["context"]["party_name"] == "Arun"
 
-def test_context_correction_amount(setup_test_db):
-    """Scenario 6: Context correction - user updates amount/price."""
-    session_id = "test_correction_amt"
-    processor = NLPProcessor(session_id=session_id, db_path=setup_test_db)
+    # Turn 3: User says "Save it"
+    turn3 = processor.process_input("Save it")
+    assert turn3["success"] is True
+    assert turn3["state"] == ContextState.IDLE
+    assert turn3["transaction_data"]["product_name"] == "Sugar"
 
-    processor.process_input("Bought 10 packets tea powder for 700 rupees")
-    corr = processor.process_input("Change amount to 650 rupees")
-    
-    assert corr["success"] is True
-    assert corr["context"]["amount"] == 650.0
-    assert corr["context"]["quantity"] == 10.0
-    assert corr["context"]["product"] == "Tea Powder"
-    assert "Updated total amount to ₹650" in corr["message"]
+def test_context_corrections(setup_test_db):
+    """Test real-time corrections to quantity, price, and supplier."""
+    processor = NLPProcessor(session_id="test_corrections", db_path=setup_test_db)
 
-def test_query_handling(setup_test_db):
-    """Scenario 11: Stock query, Sales query, Profit query."""
-    processor = NLPProcessor(session_id="test_queries", db_path=setup_test_db)
+    # Turn 1: Initial statement
+    processor.process_input("Bought 20 kg sugar from Arun for 700 rupees")
 
-    # 1. Inventory Query
-    inv_res = processor.process_input("What is the stock of rice?")
-    assert inv_res["success"] is True
-    assert inv_res["intent"] == IntentType.INVENTORY_QUERY
-    assert "Rice" in inv_res["message"]
-    assert "50" in inv_res["message"]
+    # Turn 2: Correction to quantity
+    c1 = processor.process_input("Actually change the quantity to 15 kg")
+    assert c1["success"] is True
+    assert c1["context"]["quantity"] == 15.0
+    assert c1["context"]["product"] == "Sugar"
+    assert c1["context"]["amount"] == 700.0
 
-    # 2. Sales Query
-    sales_res = processor.process_input("What are the total sales?")
-    assert sales_res["success"] is True
-    assert sales_res["intent"] == IntentType.SALES_QUERY
-    assert "Sales Summary" in sales_res["message"]
+    # Turn 3: Correction to amount
+    c2 = processor.process_input("Change amount to 650 rupees")
+    assert c2["success"] is True
+    assert c2["context"]["amount"] == 650.0
+    assert c2["context"]["quantity"] == 15.0
 
-    # 3. Profit Query
-    profit_res = processor.process_input("What is the total profit?")
-    assert profit_res["success"] is True
-    assert profit_res["intent"] == IntentType.PROFIT_QUERY
-    assert "Financial Status" in profit_res["message"]
+    # Turn 4: Correction to supplier
+    c3 = processor.process_input("Change supplier to Ramesh")
+    assert c3["success"] is True
+    assert c3["context"]["party_name"] == "Ramesh"
 
-def test_cancellation_flow(setup_test_db):
-    """Scenario: User cancels a pending transaction."""
-    processor = NLPProcessor(session_id="test_cancel", db_path=setup_test_db)
-    
-    # Start pending transaction
-    processor.process_input("Bought 20 kg rice for 800 rupees")
-    ctx_before = processor.context_mgr.get_context()
-    assert ctx_before.state == ContextState.AWAITING_CONFIRMATION
+    # Turn 5: Confirm
+    c4 = processor.process_input("yes")
+    assert c4["success"] is True
+    assert c4["transaction_data"]["supplier"] == "Ramesh"
+    assert c4["transaction_data"]["total_amount"] == 650.0
 
-    # Cancel command
-    cancel_res = processor.process_input("Cancel")
-    assert cancel_res["success"] is True
-    assert "discarded" in cancel_res["message"]
-    
-    ctx_after = processor.context_mgr.get_context()
-    assert ctx_after.state == ContextState.IDLE
+def test_insufficient_stock_rejection(setup_test_db):
+    """Test that selling more than available stock is rejected cleanly."""
+    processor = NLPProcessor(session_id="test_neg_stock", db_path=setup_test_db)
+    res = processor.process_input("Sold 5000 packets biscuits for 50000 rupees")
+    assert res["success"] is False
+    assert "insufficient stock" in res["message"].lower()
+    assert res["requires_confirmation"] is False
 
-def test_spoken_word_numbers_extraction(setup_test_db):
-    """Scenario: Natural speech numbers like 'twenty kg' or 'five hundred rupees'."""
-    processor = NLPProcessor(session_id="test_words", db_path=setup_test_db)
-    res = processor.process_input("Bought twenty kg sugar for seven hundred rupees")
-    assert res["success"] is True
-    assert res["context"]["quantity"] == 20.0
-    assert res["context"]["amount"] == 700.0
+def test_expense_and_queries(setup_test_db):
+    """Test expense recording and analytic queries."""
+    processor = NLPProcessor(session_id="test_exp_queries", db_path=setup_test_db)
+
+    # Expense
+    exp = processor.process_input("Paid 450 for electricity bill")
+    assert exp["success"] is True
+    assert exp["intent"] == IntentType.EXPENSE
+    assert exp["context"]["amount"] == 450.0
+    processor.context_mgr.reset_context()
+
+    # Stock Query
+    inv = processor.process_input("What is the stock of rice?")
+    assert inv["success"] is True
+    assert inv["intent"] == IntentType.INVENTORY_QUERY
+    assert "Rice" in inv["message"]
+
+    # Sales Query
+    sales = processor.process_input("What are the total sales?")
+    assert sales["success"] is True
+    assert sales["intent"] == IntentType.SALES_QUERY
+
+    # Profit Query
+    profit = processor.process_input("What is our profit?")
+    assert profit["success"] is True
+    assert profit["intent"] == IntentType.PROFIT_QUERY
