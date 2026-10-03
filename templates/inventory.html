@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory & Stock Management{% endblock %}
+
+{% block content %}
+<div class="inventory-page">
+    <div class="page-title-section">
+        <div class="title-wrapper">
+            <h1><i class="fa-solid fa-boxes-stacked title-icon"></i> Inventory & Stock Control</h1>
+            <p class="subtitle">Real-time Stock Levels, Unit Pricing, Low Stock Thresholds & Negative Stock Prevention</p>
+        </div>
+        <div class="header-actions-group">
+            <button class="btn btn-primary btn-sm" id="btn-open-add-product-modal">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add New Product</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Inventory KPIs -->
+    <div class="inventory-kpi-row">
+        <div class="inv-mini-card">
+            <span class="inv-mini-label">Total Unique Products</span>
+            <span class="inv-mini-val" id="inv-total-products">0</span>
+        </div>
+        <div class="inv-mini-card">
+            <span class="inv-mini-label">Total Stock Count</span>
+            <span class="inv-mini-val" id="inv-total-units">0 units</span>
+        </div>
+        <div class="inv-mini-card">
+            <span class="inv-mini-label">Total Stock Valuation</span>
+            <span class="inv-mini-val" id="inv-total-valuation">{{ currency }}0.00</span>
+        </div>
+        <div class="inv-mini-card card-warning-accent">
+            <span class="inv-mini-label">Low Stock Alerts</span>
+            <span class="inv-mini-val text-warning" id="inv-low-stock-count">0 items</span>
+        </div>
+    </div>
+
+    <!-- Inventory Table Card -->
+    <div class="card inventory-table-card">
+        <div class="table-toolbar">
+            <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="inventory-search-input" class="form-control" placeholder="Search product by name or category...">
+            </div>
+            <div class="filter-controls">
+                <select id="inventory-category-filter" class="form-select">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="data-table" id="inventory-table">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Current Stock Level</th>
+                        <th>Unit</th>
+                        <th>Avg Cost Price</th>
+                        <th>Selling Price</th>
+                        <th>Profit Margin</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-tbody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">Loading inventory stock...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add New Product -->
+<div class="modal-backdrop" id="add-product-modal" style="display: none;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-box-open"></i> Add New Product to Inventory</h3>
+                <button class="modal-close-btn" id="modal-close-btn">&times;</button>
+            </div>
+            <form id="add-product-form">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="prod-name">Product Name *</label>
+                        <input type="text" id="prod-name" class="form-control" placeholder="e.g., Basmati Rice, Sunflower Oil" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="prod-category">Category</label>
+                            <input type="text" id="prod-category" class="form-control" placeholder="e.g., Grains, Dairy, Snacks" value="General">
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="prod-unit">Unit of Measure *</label>
+                            <select id="prod-unit" class="form-select" required>
+                                <option value="kg">kg (Kilogram)</option>
+                                <option value="packets" selected>packets</option>
+                                <option value="liters">liters</option>
+                                <option value="pieces">pieces / pcs</option>
+                                <option value="boxes">boxes</option>
+                                <option value="bottles">bottles</option>
+                                <option value="bags">bags</option>
+                                <option value="dozens">dozens</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="prod-stock">Initial Stock Quantity</label>
+                            <input type="number" id="prod-stock" class="form-control" step="0.1" min="0" value="10">
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="prod-min-alert">Min Stock Alert Level</label>
+                            <input type="number" id="prod-min-alert" class="form-control" step="1" min="1" value="5">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="prod-cost">Cost Price per Unit ({{ currency }})</label>
+                            <input type="number" id="prod-cost" class="form-control" step="0.5" min="0" value="0">
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="prod-selling">Selling Price per Unit ({{ currency }})</label>
+                            <input type="number" id="prod-selling" class="form-control" step="0.5" min="0" value="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-product">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Save Product</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        loadInventoryTable();
+
+        // Search & Filter
+        document.getElementById('inventory-search-input').addEventListener('input', filterInventoryTable);
+        document.getElementById('inventory-category-filter').addEventListener('change', filterInventoryTable);
+
+        // Modal triggers
+        const modal = document.getElementById('add-product-modal');
+        document.getElementById('btn-open-add-product-modal').addEventListener('click', () => modal.style.display = 'flex');
+        document.getElementById('modal-close-btn').addEventListener('click', () => modal.style.display = 'none');
+        document.getElementById('btn-cancel-modal').addEventListener('click', () => modal.style.display = 'none');
+
+        // Add Product Form
+        document.getElementById('add-product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('prod-name').value.trim(),
+                category: document.getElementById('prod-category').value.trim() || 'General',
+                unit: document.getElementById('prod-unit').value,
+                current_stock: parseFloat(document.getElementById('prod-stock').value) || 0,
+                min_stock_alert: parseFloat(document.getElementById('prod-min-alert').value) || 5,
+                cost_price: parseFloat(document.getElementById('prod-cost').value) || 0,
+                selling_price: parseFloat(document.getElementById('prod-selling').value) || 0
+            };
+
+            try {
+                const res = await fetch('/api/inventory/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`Product '${data.name}' added successfully!`, 'success');
+                    modal.style.display = 'none';
+                    document.getElementById('add-product-form').reset();
+                    loadInventoryTable();
+                } else {
+                    showToast(result.message || 'Error adding product', 'error');
+                }
+            } catch (err) {
+                showToast('Network error while adding product', 'error');
+            }
+        });
+    });
+
+    let allInventoryProducts = [];
+
+    async function loadInventoryTable() {
+        try {
+            const res = await fetch('/api/inventory');
+            const data = await res.json();
+            allInventoryProducts = data.products || [];
+
+            // Update KPIs
+            document.getElementById('inv-total-products').textContent = data.summary.total_products;
+            document.getElementById('inv-total-units').textContent = `${data.summary.total_items} items`;
+            document.getElementById('inv-total-valuation').textContent = `₹${data.summary.total_valuation.toLocaleString()}`;
+            document.getElementById('inv-low-stock-count').textContent = `${data.summary.low_stock_count} items`;
+
+            // Populate categories dropdown
+            const cats = Array.from(new Set(allInventoryProducts.map(p => p.category))).filter(Boolean);
+            const catSelect = document.getElementById('inventory-category-filter');
+            catSelect.innerHTML = '<option value="">All Categories</option>' + 
+                cats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            renderProducts(allInventoryProducts);
+        } catch (err) {
+            console.error('Error loading inventory:', err);
+        }
+    }
+
+    function renderProducts(products) {
+        const tbody = document.getElementById('inventory-tbody');
+        if (!products.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No products found matching criteria.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = products.map(p => {
+            const isLow = p.current_stock <= p.min_stock_alert;
+            const statusBadge = isLow 
+                ? `<span class="badge badge-danger"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>`
+                : `<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
+            
+            const margin = p.selling_price > 0 && p.cost_price > 0 
+                ? (((p.selling_price - p.cost_price) / p.selling_price) * 100).toFixed(1) + '%'
+                : '--';
+
+            const stockPercent = Math.min(100, Math.max(5, (p.current_stock / (p.min_stock_alert * 3)) * 100));
+            const progressColor = isLow ? 'var(--danger-color)' : 'var(--accent-color)';
+
+            return `
+                <tr>
+                    <td class="fw-bold">${p.name}</td>
+                    <td><span class="category-pill">${p.category}</span></td>
+                    <td>
+                        <div class="stock-level-cell">
+                            <span class="stock-num ${isLow ? 'text-danger fw-bold' : ''}">${p.current_stock} ${p.unit}</span>
+                            <div class="mini-progress-bar">
+                                <div class="mini-progress-fill" style="width: ${stockPercent}%; background-color: ${progressColor}"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${p.unit}</td>
+                    <td>₹${p.cost_price.toFixed(2)}</td>
+                    <td>₹${p.selling_price.toFixed(2)}</td>
+                    <td><span class="margin-badge">${margin}</span></td>
+                    <td>${statusBadge}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterInventoryTable() {
+        const query = document.getElementById('inventory-search-input').value.toLowerCase().trim();
+        const selectedCat = document.getElementById('inventory-category-filter').value;
+
+        const filtered = allInventoryProducts.filter(p => {
+            const matchName = p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query);
+            const matchCat = !selectedCat || p.category === selectedCat;
+            return matchName && matchCat;
+        });
+
+        renderProducts(filtered);
+    }
+</script>
+{% endblock %}

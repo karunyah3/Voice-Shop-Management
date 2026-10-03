@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+
+{% block title %}Voice Assistant & NLP Console{% endblock %}
+
+{% block content %}
+<div class="voice-assistant-page">
+    <!-- Page Header -->
+    <div class="page-title-section">
+        <div class="title-wrapper">
+            <h1><i class="fa-solid fa-microphone-lines title-icon"></i> Voice-Based Shop Management</h1>
+            <p class="subtitle">Natural Language Processing Engine with Transparent Intent Classification & Entity Extraction</p>
+        </div>
+        <div class="header-badges">
+            <span class="badge badge-academic"><i class="fa-solid fa-graduation-cap"></i> Academic Viva Prototype</span>
+            <span class="badge badge-tech"><i class="fa-solid fa-brain"></i> Rule-Based NLP</span>
+            <span class="badge badge-tech"><i class="fa-solid fa-database"></i> SQLite Database</span>
+        </div>
+    </div>
+
+    <!-- Main Grid: Left Console & Right NLP Inspection Panel -->
+    <div class="assistant-grid">
+        <!-- LEFT COLUMN: Voice Interaction Console -->
+        <div class="console-column">
+            <!-- Voice Hub Card -->
+            <div class="card voice-hub-card">
+                <div class="voice-visualizer-container" id="visualizer-container">
+                    <div class="visualizer-wave"></div>
+                    <div class="visualizer-wave"></div>
+                    <div class="visualizer-wave"></div>
+                    <button class="mic-button" id="mic-btn" title="Click to start / stop speaking">
+                        <i class="fa-solid fa-microphone" id="mic-icon"></i>
+                    </button>
+                </div>
+
+                <div class="mic-status-label" id="mic-status-text">Click microphone or use text input below</div>
+                
+                <div class="voice-controls-row">
+                    <button class="btn btn-outline btn-xs" id="btn-toggle-tts">
+                        <i class="fa-solid fa-volume-high" id="tts-icon"></i>
+                        <span id="tts-label">Voice Speech: Enabled</span>
+                    </button>
+                    <button class="btn btn-outline btn-xs" id="btn-clear-chat">
+                        <i class="fa-solid fa-broom"></i>
+                        <span>Clear History</span>
+                    </button>
+                    <button class="btn btn-outline btn-xs" id="btn-reset-context">
+                        <i class="fa-solid fa-arrow-rotate-right"></i>
+                        <span>Reset Context State</span>
+                    </button>
+                </div>
+
+                <!-- Live Transcript Area -->
+                <div class="transcript-box" id="transcript-box">
+                    <div class="transcript-header">
+                        <i class="fa-solid fa-ear-listen"></i>
+                        <span>Live Speech Transcript</span>
+                    </div>
+                    <div class="transcript-content" id="live-transcript">
+                        <span class="placeholder-text">Spoken voice text will appear here in real-time...</span>
+                    </div>
+                </div>
+
+                <!-- Text Input Fallback Bar -->
+                <form id="text-command-form" class="text-input-form">
+                    <div class="input-group">
+                        <input type="text" id="command-text-input" class="form-control" placeholder="Type a command (e.g., 'Bought 20 kg rice from Kumar for 800 rupees')..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary" id="btn-send-command">
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>Process NLP</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Quick Viva Demonstration Chips -->
+                <div class="quick-chips-section">
+                    <div class="chips-title"><i class="fa-solid fa-flask"></i> Quick Demo Test Cases for Viva:</div>
+                    <div class="chips-container">
+                        <button class="chip" data-cmd="Bought 20 kg rice from Kumar for 800 rupees">
+                            <i class="fa-solid fa-cart-shopping"></i> Full Purchase
+                        </button>
+                        <button class="chip" data-cmd="Sold 5 packets biscuits for 150 rupees">
+                            <i class="fa-solid fa-cash-register"></i> Full Sale
+                        </button>
+                        <button class="chip" data-cmd="Bought rice">
+                            <i class="fa-solid fa-puzzle-piece"></i> Incomplete (Slot Filling)
+                        </button>
+                        <button class="chip" data-cmd="Actually change the quantity to 15 kg">
+                            <i class="fa-solid fa-pen-to-square"></i> Context Correction
+                        </button>
+                        <button class="chip" data-cmd="Sold 100 packets biscuits for 3000 rupees">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Stock Exceeded Rejection
+                        </button>
+                        <button class="chip" data-cmd="Paid 450 for electricity bill">
+                            <i class="fa-solid fa-bolt"></i> Overhead Expense
+                        </button>
+                        <button class="chip" data-cmd="What is the stock of rice?">
+                            <i class="fa-solid fa-cubes"></i> Check Stock
+                        </button>
+                        <button class="chip" data-cmd="What is the total profit?">
+                            <i class="fa-solid fa-chart-line"></i> Check Profit
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversation Dialogue History Feed -->
+            <div class="card chat-feed-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-comments"></i>
+                        <span>Conversation Dialogue Stream</span>
+                    </div>
+                    <span class="session-badge" id="session-badge">Session: Active</span>
+                </div>
+                <div class="dialogue-feed" id="dialogue-feed">
+                    <!-- Welcome Initial Message -->
+                    <div class="dialogue-message assistant-message">
+                        <div class="message-avatar"><i class="fa-solid fa-robot"></i></div>
+                        <div class="message-bubble">
+                            <div class="message-sender">Shop Assistant</div>
+                            <div class="message-text">
+                                Hello! I am your voice-based shop assistant. You can speak transactions naturally like:
+                                <br><br>
+                                <em>"Bought 20 kg rice from Kumar for 800 rupees"</em> or <em>"Sold 5 packets biscuits for 150 rupees"</em>.
+                            </div>
+                            <div class="message-time">System Ready</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: NLP Pipeline Trace & Smart Confirmation -->
+        <div class="nlp-column">
+            <!-- Smart Confirmation Action Box (Displayed when transaction is ready) -->
+            <div class="card confirmation-card" id="confirmation-card" style="display: none;">
+                <div class="confirmation-header">
+                    <i class="fa-solid fa-circle-question"></i>
+                    <span>Smart Transaction Confirmation Required</span>
+                </div>
+                <div class="confirmation-body">
+                    <p class="confirmation-prompt" id="confirmation-prompt-text">
+                        Please confirm transaction?
+                    </p>
+                    <div class="confirmation-summary-box" id="confirmation-summary-box">
+                        <!-- Filled dynamically -->
+                    </div>
+                    <div class="confirmation-actions">
+                        <button class="btn btn-success btn-lg" id="btn-confirm-action">
+                            <i class="fa-solid fa-check"></i>
+                            <span>Confirm & Commit (Say "Confirm")</span>
+                        </button>
+                        <button class="btn btn-danger btn-lg" id="btn-cancel-action">
+                            <i class="fa-solid fa-xmark"></i>
+                            <span>Cancel (Say "Cancel")</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NLP Pipeline Step-by-Step Inspection Card -->
+            <div class="card nlp-trace-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>NLP Pipeline Trace & Intent Analysis</span>
+                    </div>
+                    <span class="state-pill state-idle" id="current-state-pill">State: IDLE</span>
+                </div>
+                
+                <div class="trace-section">
+                    <!-- Intent Detection -->
+                    <div class="trace-block">
+                        <div class="trace-label">
+                            <i class="fa-solid fa-bullseye"></i>
+                            <span>1. Intent Classification</span>
+                        </div>
+                        <div class="trace-value" id="trace-intent">
+                            <span class="intent-badge intent-unknown">AWAITING INPUT</span>
+                        </div>
+                    </div>
+
+                    <!-- Explainable Confidence Meter -->
+                    <div class="trace-block">
+                        <div class="trace-label">
+                            <i class="fa-solid fa-gauge-high"></i>
+                            <span>2. Explainable Confidence Metric</span>
+                            <span class="confidence-percent" id="confidence-percentage">--%</span>
+                        </div>
+                        <div class="confidence-meter-bar">
+                            <div class="confidence-meter-fill" id="confidence-meter-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="confidence-factors-box" id="confidence-factors-box">
+                            <div class="factor-item text-muted">Awaiting natural language input to calculate confidence breakdown...</div>
+                        </div>
+                    </div>
+
+                    <!-- Extracted Entities Grid -->
+                    <div class="trace-block">
+                        <div class="trace-label">
+                            <i class="fa-solid fa-tags"></i>
+                            <span>3. Extracted Named Entities & Slots</span>
+                        </div>
+                        <div class="entities-grid" id="entities-grid">
+                            <div class="entity-slot">
+                                <span class="slot-name">Product</span>
+                                <span class="slot-val" id="slot-product">--</span>
+                            </div>
+                            <div class="entity-slot">
+                                <span class="slot-name">Quantity</span>
+                                <span class="slot-val" id="slot-quantity">--</span>
+                            </div>
+                            <div class="entity-slot">
+                                <span class="slot-name">Unit</span>
+                                <span class="slot-val" id="slot-unit">--</span>
+                            </div>
+                            <div class="entity-slot">
+                                <span class="slot-name">Amount</span>
+                                <span class="slot-val" id="slot-amount">--</span>
+                            </div>
+                            <div class="entity-slot">
+                                <span class="slot-name">Party Name</span>
+                                <span class="slot-val" id="slot-party">--</span>
+                            </div>
+                            <div class="entity-slot">
+                                <span class="slot-name">Category</span>
+                                <span class="slot-val" id="slot-category">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multi-Turn Context Tracking -->
+                    <div class="trace-block">
+                        <div class="trace-label">
+                            <i class="fa-solid fa-layer-group"></i>
+                            <span>4. Multi-Turn Context Memory</span>
+                        </div>
+                        <div class="context-memory-box" id="context-memory-box">
+                            <div class="context-row">
+                                <span class="context-key">Missing Slots:</span>
+                                <span class="context-val text-success" id="ctx-missing-slots">None (Complete)</span>
+                            </div>
+                            <div class="context-row">
+                                <span class="context-key">Last Prompt:</span>
+                                <span class="context-val" id="ctx-last-prompt">None</span>
+                            </div>
+                            <div class="context-row">
+                                <span class="context-key">Raw Text:</span>
+                                <span class="context-val code-font" id="ctx-raw-text">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

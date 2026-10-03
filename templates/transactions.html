@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}Transaction Ledger & History{% endblock %}
+
+{% block content %}
+<div class="transactions-page">
+    <div class="page-title-section">
+        <div class="title-wrapper">
+            <h1><i class="fa-solid fa-receipt title-icon"></i> Shop Transaction Ledger</h1>
+            <p class="subtitle">Complete Audit History of Purchases, Sales, Expenses & Profit Calculations</p>
+        </div>
+        <div class="header-actions-group">
+            <button class="btn btn-secondary btn-sm" id="btn-open-manual-tx-modal">
+                <i class="fa-solid fa-pen"></i>
+                <span>Manual Entry Fallback</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card filter-card">
+        <div class="table-toolbar">
+            <div class="type-filter-tabs">
+                <button class="filter-tab active" data-type="">All Transactions</button>
+                <button class="filter-tab" data-type="PURCHASE"><i class="fa-solid fa-cart-flatbed"></i> Purchases</button>
+                <button class="filter-tab" data-type="SALE"><i class="fa-solid fa-cash-register"></i> Sales</button>
+                <button class="filter-tab" data-type="EXPENSE"><i class="fa-solid fa-receipt"></i> Expenses</button>
+            </div>
+            <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="tx-search-input" class="form-control" placeholder="Search by item, party name, or notes...">
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card transactions-table-card">
+        <div class="table-responsive">
+            <table class="data-table" id="transactions-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Product / Category</th>
+                        <th>Quantity & Unit</th>
+                        <th>Unit Rate</th>
+                        <th>Total Amount</th>
+                        <th>Party (Supplier / Customer)</th>
+                        <th>Profit</th>
+                        <th>Voice Command / Notes</th>
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-tbody">
+                    <tr>
+                        <td colspan="11" class="text-center text-muted">Loading transaction records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Manual Transaction Entry -->
+<div class="modal-backdrop" id="manual-tx-modal" style="display: none;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-pen-to-square"></i> Record Manual Transaction</h3>
+                <button class="modal-close-btn" id="modal-close-tx-btn">&times;</button>
+            </div>
+            <form id="manual-tx-form">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="manual-type">Transaction Type *</label>
+                        <select id="manual-type" class="form-select" required>
+                            <option value="PURCHASE">Purchase (Stock In)</option>
+                            <option value="SALE">Sale (Stock Out)</option>
+                            <option value="EXPENSE">Expense (Overhead)</option>
+                        </select>
+                    </div>
+
+                    <!-- Fields for Purchase & Sale -->
+                    <div id="product-specific-fields">
+                        <div class="form-group">
+                            <label for="manual-product-name">Product Name *</label>
+                            <input type="text" id="manual-product-name" class="form-control" placeholder="e.g. Rice, Sugar, Biscuits">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-half">
+                                <label for="manual-qty">Quantity *</label>
+                                <input type="number" id="manual-qty" class="form-control" step="0.1" min="0.1" value="1">
+                            </div>
+                            <div class="form-group col-half">
+                                <label for="manual-unit">Unit</label>
+                                <select id="manual-unit" class="form-select">
+                                    <option value="kg">kg</option>
+                                    <option value="packets">packets</option>
+                                    <option value="liters">liters</option>
+                                    <option value="pieces">pieces</option>
+                                    <option value="boxes">boxes</option>
+                                    <option value="bottles">bottles</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fields for Expense -->
+                    <div id="expense-specific-fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="manual-category">Expense Category *</label>
+                            <input type="text" id="manual-category" class="form-control" placeholder="e.g. Electricity, Rent, Tea">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="manual-amount">Total Amount ({{ currency }}) *</label>
+                            <input type="number" id="manual-amount" class="form-control" step="0.5" min="1" required>
+                        </div>
+                        <div class="form-group col-half" id="party-name-group">
+                            <label for="manual-party">Supplier / Customer Name</label>
+                            <input type="text" id="manual-party" class="form-control" placeholder="e.g. Kumar / Rahul">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="manual-notes">Notes / Remarks</label>
+                        <input type="text" id="manual-notes" class="form-control" placeholder="Manual transaction note">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-tx-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Save Transaction</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentFilterType = "";
+    let searchDebounce = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadTransactionsTable();
+
+        // Type filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilterType = tab.dataset.type;
+                loadTransactionsTable();
+            });
+        });
+
+        // Search bar
+        document.getElementById('tx-search-input').addEventListener('input', (e) => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                loadTransactionsTable();
+            }, 300);
+        });
+
+        // Modal triggers
+        const modal = document.getElementById('manual-tx-modal');
+        document.getElementById('btn-open-manual-tx-modal').addEventListener('click', () => modal.style.display = 'flex');
+        document.getElementById('modal-close-tx-btn').addEventListener('click', () => modal.style.display = 'none');
+        document.getElementById('btn-cancel-tx-modal').addEventListener('click', () => modal.style.display = 'none');
+
+        // Type toggle in modal
+        const typeSelect = document.getElementById('manual-type');
+        typeSelect.addEventListener('change', () => {
+            const isExp = typeSelect.value === 'EXPENSE';
+            document.getElementById('product-specific-fields').style.display = isExp ? 'none' : 'block';
+            document.getElementById('expense-specific-fields').style.display = isExp ? 'block' : 'none';
+            document.getElementById('party-name-group').style.display = isExp ? 'none' : 'block';
+        });
+
+        // Submit manual transaction
+        document.getElementById('manual-tx-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('manual-type').value;
+            const payload = {
+                type: type,
+                product_name: document.getElementById('manual-product-name').value.trim(),
+                quantity: parseFloat(document.getElementById('manual-qty').value) || 0,
+                unit: document.getElementById('manual-unit').value,
+                category: document.getElementById('manual-category').value.trim() || 'Miscellaneous',
+                total_amount: parseFloat(document.getElementById('manual-amount').value) || 0,
+                party_name: document.getElementById('manual-party').value.trim() || null,
+                notes: document.getElementById('manual-notes').value.trim() || 'Manual Entry'
+            };
+
+            try {
+                const res = await fetch('/api/transactions/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast('Transaction recorded successfully!', 'success');
+                    modal.style.display = 'none';
+                    document.getElementById('manual-tx-form').reset();
+                    loadTransactionsTable();
+                } else {
+                    showToast(result.message || 'Transaction failed', 'error');
+                }
+            } catch (err) {
+                showToast('Network error while recording transaction', 'error');
+            }
+        });
+    });
+
+    async function loadTransactionsTable() {
+        const query = document.getElementById('tx-search-input').value.trim();
+        let url = `/api/transactions?limit=100`;
+        if (currentFilterType) url += `&type=${currentFilterType}`;
+        if (query) url += `&search=${encodeURIComponent(query)}`;
+
+        try {
+            const res = await fetch(url);
+            const txs = await res.json();
+            renderTransactions(txs);
+        } catch (err) {
+            console.error('Error fetching transactions:', err);
+        }
+    }
+
+    function renderTransactions(txs) {
+        const tbody = document.getElementById('transactions-tbody');
+        if (!txs.length) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No transactions found matching criteria.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = txs.map(t => {
+            let badgeClass = 'badge-primary';
+            if (t.type === 'PURCHASE') badgeClass = 'badge-purple';
+            else if (t.type === 'SALE') badgeClass = 'badge-success';
+            else if (t.type === 'EXPENSE') badgeClass = 'badge-danger';
+
+            const itemDisplay = t.product_name || t.category || '--';
+            const qtyDisplay = t.quantity ? `${t.quantity} ${t.unit || ''}` : '--';
+            const rateDisplay = t.unit_price ? `₹${t.unit_price.toFixed(2)}` : '--';
+            const profitDisplay = t.type === 'SALE' 
+                ? `<span class="profit-val ${t.profit >= 0 ? 'text-success' : 'text-danger'}">+₹${t.profit.toFixed(2)}</span>`
+                : '--';
+
+            return `
+                <tr>
+                    <td class="code-font">#${t.id}</td>
+                    <td><span class="badge ${badgeClass}">${t.type}</span></td>
+                    <td class="fw-bold">${itemDisplay}</td>
+                    <td>${qtyDisplay}</td>
+                    <td>${rateDisplay}</td>
+                    <td class="fw-bold">₹${t.total_amount.toFixed(2)}</td>
+                    <td>${t.party_name || '--'}</td>
+                    <td>${profitDisplay}</td>
+                    <td><span class="notes-truncate" title="${t.notes || ''}">${t.notes || '--'}</span></td>
+                    <td class="text-muted small">${t.created_at || 'Just now'}</td>
+                    <td>
+                        <button class="btn btn-outline btn-xs text-danger" onclick="deleteTx(${t.id})" title="Delete Transaction">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function deleteTx(id) {
+        if (!confirm(`Are you sure you want to delete transaction #${id}?`)) return;
+        try {
+            const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`Transaction #${id} deleted`, 'info');
+                loadTransactionsTable();
+            }
+        } catch (err) {
+            showToast('Error deleting transaction', 'error');
+        }
+    }
+</script>
+{% endblock %}
