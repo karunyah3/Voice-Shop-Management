@@ -7,9 +7,14 @@
     <div class="page-title-section">
         <div class="title-wrapper">
             <h1>Reports & Financial Overview</h1>
-            <p class="subtitle">Live revenue, purchases, expenses, and net profit calculations</p>
+            <p class="subtitle">Live revenue, purchases, overhead expenses, and accurate profit calculations</p>
         </div>
         <div class="header-actions-group">
+            <div class="period-toggle-group">
+                <button class="period-btn active" data-period="today" id="btn-period-today">Today</button>
+                <button class="period-btn" data-period="month" id="btn-period-month">This Month</button>
+                <button class="period-btn" data-period="all_time" id="btn-period-all">All Time</button>
+            </div>
             <button class="btn btn-secondary btn-sm" id="btn-refresh-dashboard">
                 <i class="fa-solid fa-arrows-rotate"></i>
                 <span>Refresh</span>
@@ -17,11 +22,20 @@
         </div>
     </div>
 
+    <!-- Low Stock Alert Banner (dynamically shown if low stock exists) -->
+    <div class="low-stock-alert-banner" id="low-stock-banner" style="display: none;">
+        <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="alert-content">
+            <strong>Low Stock Warning:</strong> <span id="low-stock-banner-text">0 items are below minimum threshold</span>.
+        </div>
+        <a href="/inventory" class="btn btn-outline btn-xs alert-action-btn">View Inventory</a>
+    </div>
+
     <!-- KPI Metric Cards Grid -->
     <div class="kpi-grid">
         <!-- Total Sales -->
         <div class="kpi-card">
-            <span class="kpi-label">Total Sales</span>
+            <span class="kpi-label" id="kpi-sales-label">Today's Sales</span>
             <span class="kpi-value text-success" id="kpi-sales">{{ currency }}0.00</span>
             <div class="kpi-footer">
                 <span id="kpi-sales-count">0 sales</span>
@@ -30,7 +44,7 @@
 
         <!-- Total Purchases -->
         <div class="kpi-card">
-            <span class="kpi-label">Total Purchases</span>
+            <span class="kpi-label" id="kpi-purchases-label">Today's Purchases</span>
             <span class="kpi-value text-primary" id="kpi-purchases">{{ currency }}0.00</span>
             <div class="kpi-footer">
                 <span id="kpi-purchases-count">0 purchases</span>
@@ -39,29 +53,29 @@
 
         <!-- Total Expenses -->
         <div class="kpi-card">
-            <span class="kpi-label">Overhead Expenses</span>
+            <span class="kpi-label" id="kpi-expenses-label">Today's Expenses</span>
             <span class="kpi-value text-danger" id="kpi-expenses">{{ currency }}0.00</span>
             <div class="kpi-footer">
                 <span id="kpi-expenses-count">0 expenses</span>
             </div>
         </div>
 
-        <!-- Net Profit / Loss -->
+        <!-- Net Profit / Operating Profit -->
         <div class="kpi-card" id="kpi-profit-card">
-            <span class="kpi-label">Net Profit / Loss</span>
+            <span class="kpi-label" id="kpi-profit-label">Net Profit / Loss</span>
             <span class="kpi-value" id="kpi-net-profit">{{ currency }}0.00</span>
             <div class="kpi-footer">
                 <span class="badge badge-success" id="kpi-profit-badge">Net Profit</span>
-                <span id="kpi-margin-text">Margin: 0.0%</span>
+                <span id="kpi-gross-profit-text" title="Gross margin on items sold">Item Profit: {{ currency }}0.00</span>
             </div>
         </div>
 
-        <!-- Inventory Valuation -->
+        <!-- Inventory Stock Valuation -->
         <div class="kpi-card">
             <span class="kpi-label">Stock Valuation</span>
             <span class="kpi-value" id="kpi-stock-valuation">{{ currency }}0.00</span>
             <div class="kpi-footer">
-                <span id="kpi-inventory-count">0 items</span>
+                <span id="kpi-inventory-count">0 products (0 items)</span>
             </div>
         </div>
     </div>
@@ -73,6 +87,10 @@
                 <div class="card-title">
                     <i class="fa-solid fa-chart-area"></i>
                     <span>Financial Timeline</span>
+                </div>
+                <div class="chart-controls">
+                    <button class="btn btn-outline btn-xs active" id="btn-chart-daily">Daily</button>
+                    <button class="btn btn-outline btn-xs" id="btn-chart-monthly">Monthly</button>
                 </div>
             </div>
             <div class="chart-wrapper">
@@ -101,7 +119,7 @@
                 <span>Recent Transactions</span>
             </div>
             <a href="/transactions" class="btn btn-outline btn-xs">
-                <span>View All</span>
+                <span>View Full Ledger</span>
                 <i class="fa-solid fa-arrow-right"></i>
             </a>
         </div>

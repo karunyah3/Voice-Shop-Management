@@ -36,15 +36,15 @@ def transactions_view():
 
 @dashboard_bp.route('/api/dashboard/stats', methods=['GET'])
 def get_dashboard_stats():
-    """Return live financial metrics, inventory totals, and chart series."""
+    """Return live financial metrics (Today, Month, All-Time), inventory totals, and chart series."""
     profit_service = ProfitService()
     inv_service = InventoryService()
     tx_service = TransactionService()
 
-    summary = profit_service.get_financial_summary()
+    summary = profit_service.get_comprehensive_summary()
     charts = profit_service.get_chart_data()
     inv_summary = inv_service.get_stock_summary()
-    recent_txs = [t.to_dict() for t in tx_service.get_recent_transactions(limit=6)]
+    recent_txs = [t.to_dict() for t in tx_service.get_recent_transactions(limit=8)]
 
     return jsonify({
         "financials": summary,

@@ -310,3 +310,122 @@ def test_expense_and_queries(setup_test_db):
     profit = processor.process_input("What is our profit?")
     assert profit["success"] is True
     assert profit["intent"] == IntentType.PROFIT_QUERY
+
+def test_in_utterance_self_corrections(setup_test_db):
+    """Test handling of self-corrections made within the exact same utterance."""
+    processor = NLPProcessor(session_id="test_in_utterance", db_path=setup_test_db)
+
+    # 1. "Sell 5 kg rice wait no 10 kg rice for 400."
+    res1 = processor.process_input("Sell 5 kg rice wait no 10 kg rice for 400.")
+    assert res1["success"] is True
+    assert res1["intent"] == IntentType.SALE
+    assert res1["context"]["product"] == "Rice"
+    assert res1["context"]["quantity"] == 10.0
+    assert res1["context"]["amount"] == 400.0
+    processor.context_mgr.reset_context()
+
+    # 2. "Bought 5 kg sugar actually 10 kg sugar for 400."
+    res2 = processor.process_input("Bought 5 kg sugar actually 10 kg sugar for 400.")
+    assert res2["success"] is True
+    assert res2["intent"] == IntentType.PURCHASE
+    assert res2["context"]["product"] == "Sugar"
+    assert res2["context"]["quantity"] == 10.0
+    assert res2["context"]["amount"] == 400.0
+    processor.context_mgr.reset_context()
+
+    # 3. "Sold 2 packets biscuits sorry 3 packets for 90."
+    res3 = processor.process_input("Sold 2 packets biscuits sorry 3 packets for 90.")
+    assert res3["success"] is True
+    assert res3["intent"] == IntentType.SALE
+    assert res3["context"]["product"] == "Biscuits"
+    assert res3["context"]["quantity"] == 3.0
+    assert res3["context"]["amount"] == 90.0
+    processor.context_mgr.reset_context()
+
+    # 4. "Arun supplied 5 kg rice no make that 10 kg for 400."
+    res4 = processor.process_input("Arun supplied 5 kg rice no make that 10 kg for 400.")
+    assert res4["success"] is True
+    assert res4["intent"] == IntentType.PURCHASE
+    assert res4["context"]["product"] == "Rice"
+    assert res4["context"]["quantity"] == 10.0
+    assert res4["context"]["amount"] == 400.0
+    assert res4["context"]["party_name"] == "Arun"
+    processor.context_mgr.reset_context()
+
+def test_unit_rate_and_composite_spoken_numbers(setup_test_db):
+    """Test unit rate auto-multiplication and composite spoken word numbers."""
+    processor = NLPProcessor(session_id="test_rate_numbers", db_path=setup_test_db)
+
+    # 1. Unit rate: "Sell 5 kg rice at 40 per kg to Rahul" -> Total = 5 * 40 = 200
+    res1 = processor.process_input("Sell 5 kg rice at 40 per kg to Rahul")
+    assert res1["success"] is True
+    assert res1["intent"] == IntentType.SALE
+    assert res1["context"]["product"] == "Rice"
+    assert res1["context"]["quantity"] == 5.0
+    assert res1["context"]["amount"] == 200.0
+    assert res1["context"]["party_name"] == "Rahul"
+    processor.context_mgr.reset_context()
+
+    # 2. Fractions & spoken words: "Bought two and a half liters oil for three hundred"
+    res2 = processor.process_input("Bought two and a half liters oil for three hundred")
+    assert res2["success"] is True
+    assert res2["intent"] == IntentType.PURCHASE
+    assert res2["context"]["product"] == "Sunflower Oil"
+    assert res2["context"]["quantity"] == 2.5
+    assert res2["context"]["unit"] == "liters"
+    assert res2["context"]["amount"] == 300.0
+    processor.context_mgr.reset_context()
+
+    # 3. Compound words: "Sold twenty five packets of biscuits for seven hundred and fifty rupees"
+    res3 = processor.process_input("Sold twenty five packets of biscuits for seven hundred and fifty rupees")
+    assert res3["success"] is True
+    assert res3["intent"] == IntentType.SALE
+    assert res3["context"]["product"] == "Biscuits"
+    assert res3["context"]["quantity"] == 25.0
+    assert res3["context"]["amount"] == 750.0
+    processor.context_mgr.reset_context()
+
+def test_word_orders_and_prepositions(setup_test_db):
+    """Test various sentence structures and preposition placements."""
+    processor = NLPProcessor(session_id="test_word_orders", db_path=setup_test_db)
+
+    # 1. Destination-first: "To Sita sold 2 packets biscuits for 60"
+    res1 = processor.process_input("To Sita sold 2 packets biscuits for 60")
+    assert res1["success"] is True
+    assert res1["intent"] == IntentType.SALE
+    assert res1["context"]["party_name"] == "Sita"
+    assert res1["context"]["product"] == "Biscuits"
+    assert res1["context"]["quantity"] == 2.0
+    assert res1["context"]["amount"] == 60.0
+    processor.context_mgr.reset_context()
+
+    # 2. Source-first: "From Arun bought 10 kg sugar for 400"
+    res2 = processor.process_input("From Arun bought 10 kg sugar for 400")
+    assert res2["success"] is True
+    assert res2["intent"] == IntentType.PURCHASE
+    assert res2["context"]["party_name"] == "Arun"
+    assert res2["context"]["product"] == "Sugar"
+    assert res2["context"]["quantity"] == 10.0
+    assert res2["context"]["amount"] == 400.0
+    processor.context_mgr.reset_context()
+
+    # 3. Price-first: "For 300 rupees sold 5 kg rice to Rahul"
+    res3 = processor.process_input("For 300 rupees sold 5 kg rice to Rahul")
+    assert res3["success"] is True
+    assert res3["intent"] == IntentType.SALE
+    assert res3["context"]["product"] == "Rice"
+    assert res3["context"]["quantity"] == 5.0
+    assert res3["context"]["amount"] == 300.0
+    assert res3["context"]["party_name"] == "Rahul"
+    processor.context_mgr.reset_context()
+
+    # 4. Product-first: "Sugar 5 kg sold to Ramesh for 225"
+    res4 = processor.process_input("Sugar 5 kg sold to Ramesh for 225")
+    assert res4["success"] is True
+    assert res4["intent"] == IntentType.SALE
+    assert res4["context"]["product"] == "Sugar"
+    assert res4["context"]["quantity"] == 5.0
+    assert res4["context"]["amount"] == 225.0
+    assert res4["context"]["party_name"] == "Ramesh"
+    processor.context_mgr.reset_context()
+

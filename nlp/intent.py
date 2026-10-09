@@ -65,9 +65,11 @@ INTENT_PATTERNS = {
     IntentType.SALE: [
         (r"\b(sold|sell|sale|customer bought|billed|dispatched|stock out|outward|given to)\b", 0.90),
         (r"\b(sold to|sell to|customer|billed to)\b", 0.92),
-        (r"\b[A-Za-z]+\s+(bought|purchased|took|ordered)\s+(?:for|\d+|rupees|worth|kg|packets|sugar|rice|oil|dal|tea|soap|atta)\b", 0.92),
+        (r"(?<!\bfrom\s)\b[A-Za-z]+\s+(bought|purchased|took|ordered)\s+(?:for|\d+|rupees|worth|kg|packets|sugar|rice|oil|dal|tea|soap|atta)\b", 0.92),
     ]
 }
+
+from .entity_extractor import resolve_in_utterance_corrections
 
 def detect_intent(text: str, current_state: str = "IDLE") -> Tuple[str, float, str]:
     """
@@ -80,10 +82,13 @@ def detect_intent(text: str, current_state: str = "IDLE") -> Tuple[str, float, s
     Returns:
         Tuple of (intent_name, confidence_score, matched_rule_description)
     """
-    cleaned = text.strip().lower()
-    
-    if not cleaned:
+    raw_cleaned = text.strip().lower()
+    if not raw_cleaned:
         return IntentType.UNKNOWN, 0.0, "Empty input"
+
+    # Resolve in-utterance self-correction if present (e.g. "Sell 5 kg wait no 10 kg")
+    effective_text, _ = resolve_in_utterance_corrections(text)
+    cleaned = effective_text.strip().lower()
 
     # Contextual priority: if we are waiting for confirmation/slots, check control commands first
     if current_state in ("AWAITING_CONFIRMATION", "AWAITING_QUANTITY", "AWAITING_AMOUNT", "AWAITING_PRODUCT"):
@@ -98,12 +103,12 @@ def detect_intent(text: str, current_state: str = "IDLE") -> Tuple[str, float, s
         return IntentType.PURCHASE, 0.93, "Natural language purchase indicator"
 
     # If phrase contains "<Name> bought ... worth of ..." or "<Name> took ... from shop" -> SALE
-    # e.g., "Arun bought 500 rupees worth of sugar"
-    if re.search(r'\b[a-z]+\s+bought\b', cleaned) and not re.search(r'\b(i bought|we bought|bought from)\b', cleaned):
+    # e.g., "Arun bought 500 rupees worth of sugar", but NOT "From Arun bought..." or "I bought from Arun"
+    if re.search(r'\b[a-z]+\s+bought\b', cleaned) and not re.search(r'\b(i bought|we bought|bought from|from\s+[a-z]+\s+bought)\b', cleaned) and not re.search(r'^\s*from\s+', cleaned):
         return IntentType.SALE, 0.92, "Customer bought pattern -> Sale"
 
     # If phrase contains "from <Name>" and a product name, but no explicit verb -> PURCHASE
-    # e.g. "Sugar from Arun, 500 rupees" or "Got 500 grams sugar from Arun"
+    # e.g. "Sugar from Arun, 500 rupees" or "Got 500 grams sugar from Arun" or "From Arun bought 10 kg sugar"
     if re.search(r'\bfrom\s+[a-z]+\b', cleaned) and not re.search(r'\b(sold|sell|sale)\b', cleaned):
         return IntentType.PURCHASE, 0.88, "Inward source 'from <party>' matched -> Purchase"
 

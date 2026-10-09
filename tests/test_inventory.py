@@ -1,6 +1,6 @@
 """
 Automated Test Suite for Inventory Management, Stock Updates,
-and Negative Stock Prevention.
+Negative Stock Prevention, Safe Transaction Reversals, and CSV Export.
 """
 import pytest
 import os
@@ -102,3 +102,35 @@ def test_negative_stock_prevention(setup_test_db):
     assert voice_res["is_insufficient_stock"] is True
     assert voice_res["available_stock"] == current_stock
     assert voice_res["requires_confirmation"] is False
+
+def test_safe_transaction_reversals(setup_test_db):
+    """Test that deleting/reversing transactions restores and syncs stock safely."""
+    inv_service = InventoryService(db_path=setup_test_db)
+    tx_service = TransactionService(db_path=setup_test_db)
+
+    # 1. Sale Reversal: Selling 5 kg Rice decreases stock to 45. Reversing restores it to 50.
+    rice_init = inv_service.find_product_by_name("Rice").current_stock # 50
+    sale_tx = tx_service.record_sale("Rice", 5.0, "kg", 250.0, "Customer A")
+    assert inv_service.find_product_by_name("Rice").current_stock == rice_init - 5.0
+
+    rev_res = tx_service.reverse_transaction(sale_tx["transaction_id"])
+    assert rev_res["success"] is True
+    assert inv_service.find_product_by_name("Rice").current_stock == rice_init
+
+    # 2. Purchase Reversal: Purchasing 10 kg Sugar increases stock to 50. Reversing deducts it back to 40.
+    sugar_init = inv_service.find_product_by_name("Sugar").current_stock # 40
+    purch_tx = tx_service.record_purchase("Sugar", 10.0, "kg", 350.0, "Supplier B")
+    assert inv_service.find_product_by_name("Sugar").current_stock == sugar_init + 10.0
+
+    rev_purch = tx_service.reverse_transaction(purch_tx["transaction_id"])
+    assert rev_purch["success"] is True
+    assert inv_service.find_product_by_name("Sugar").current_stock == sugar_init
+
+def test_csv_export(setup_test_db):
+    """Test CSV report generation matching database transactions."""
+    tx_service = TransactionService(db_path=setup_test_db)
+    csv_str = tx_service.export_transactions_csv()
+
+    assert "Transaction ID,Type,Product / Category,Quantity" in csv_str
+    assert "PURCHASE" in csv_str
+    assert "SALE" in csv_str

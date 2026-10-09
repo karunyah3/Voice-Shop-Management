@@ -7,28 +7,56 @@
     <div class="page-title-section">
         <div class="title-wrapper">
             <h1>Transaction Ledger</h1>
-            <p class="subtitle">Audit log of all recorded purchases, sales, and overhead expenses</p>
+            <p class="subtitle">Complete audit log of all recorded purchases, sales, and overhead expenses</p>
         </div>
         <div class="header-actions-group">
-            <button class="btn btn-secondary btn-sm" id="btn-open-manual-tx-modal">
+            <button class="btn btn-outline btn-sm" id="btn-export-csv" title="Download CSV Report">
+                <i class="fa-solid fa-file-csv"></i>
+                <span>Export CSV</span>
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-open-manual-tx-modal">
                 <i class="fa-solid fa-plus"></i>
                 <span>Manual Entry</span>
             </button>
         </div>
     </div>
 
-    <!-- Filter Bar -->
+    <!-- Filter Card: Type, Date Ranges, Search -->
     <div class="card filter-card">
-        <div class="table-toolbar">
+        <div class="filter-card-row">
             <div class="type-filter-tabs">
-                <button class="filter-tab active" data-type="">All</button>
+                <button class="filter-tab active" data-type="">All Types</button>
                 <button class="filter-tab" data-type="PURCHASE">Purchases</button>
                 <button class="filter-tab" data-type="SALE">Sales</button>
                 <button class="filter-tab" data-type="EXPENSE">Expenses</button>
             </div>
+
             <div class="search-input-wrapper">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="tx-search-input" class="form-control" placeholder="Search product, party, or notes...">
+                <input type="text" id="tx-search-input" class="form-control" placeholder="Search product, party, ID, or notes...">
+            </div>
+        </div>
+
+        <div class="filter-card-row date-filter-row">
+            <div class="quick-date-pills">
+                <button class="date-pill active" data-date-range="all">All Dates</button>
+                <button class="date-pill" data-date-range="today">Today</button>
+                <button class="date-pill" data-date-range="yesterday">Yesterday</button>
+                <button class="date-pill" data-date-range="last7">Last 7 Days</button>
+                <button class="date-pill" data-date-range="month">This Month</button>
+            </div>
+
+            <div class="custom-date-range">
+                <div class="date-input-group">
+                    <label for="tx-start-date">From:</label>
+                    <input type="date" id="tx-start-date" class="form-control form-control-sm">
+                </div>
+                <div class="date-input-group">
+                    <label for="tx-end-date">To:</label>
+                    <input type="date" id="tx-end-date" class="form-control form-control-sm">
+                </div>
+                <button class="btn btn-secondary btn-xs" id="btn-apply-custom-date">Apply</button>
+                <button class="btn btn-outline btn-xs" id="btn-clear-date">Clear</button>
             </div>
         </div>
     </div>
@@ -46,18 +74,35 @@
                         <th>Rate</th>
                         <th>Total Amount</th>
                         <th>Party (Supplier / Customer)</th>
-                        <th>Profit</th>
-                        <th>Notes / Speech</th>
+                        <th>Profit / Margin</th>
                         <th>Date & Time</th>
-                        <th>Action</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="transactions-tbody">
                     <tr>
-                        <td colspan="11" class="text-center text-muted">Loading transactions...</td>
+                        <td colspan="10" class="text-center text-muted">Loading transactions...</td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Transaction Details Inspection -->
+<div class="modal-backdrop" id="tx-detail-modal" style="display: none;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-receipt"></i> Transaction Details</h3>
+                <button class="modal-close-btn" id="modal-close-detail-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="tx-detail-body">
+                <!-- Dynamically populated -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-close-detail-modal">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -126,7 +171,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="manual-notes">Notes</label>
+                        <label for="manual-notes">Notes / Details</label>
                         <input type="text" id="manual-notes" class="form-control" placeholder="Optional notes">
                     </div>
                 </div>
@@ -146,7 +191,10 @@
 {% block scripts %}
 <script>
     let currentFilterType = "";
+    let currentStartDate = "";
+    let currentEndDate = "";
     let searchDebounce = null;
+    let allLoadedTransactions = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         loadTransactionsTable();
@@ -161,21 +209,94 @@
             });
         });
 
-        // Search bar
-        document.getElementById('tx-search-input').addEventListener('input', (e) => {
-            clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(() => {
+        // Quick Date pills
+        document.querySelectorAll('.date-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                
+                const range = pill.dataset.dateRange;
+                const now = new Date();
+                const formatDate = d => d.toISOString().split('T')[0];
+
+                if (range === 'today') {
+                    currentStartDate = formatDate(now);
+                    currentEndDate = formatDate(now);
+                } else if (range === 'yesterday') {
+                    const yest = new Date(now);
+                    yest.setDate(yest.getDate() - 1);
+                    currentStartDate = formatDate(yest);
+                    currentEndDate = formatDate(yest);
+                } else if (range === 'last7') {
+                    const l7 = new Date(now);
+                    l7.setDate(l7.getDate() - 7);
+                    currentStartDate = formatDate(l7);
+                    currentEndDate = formatDate(now);
+                } else if (range === 'month') {
+                    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                    currentStartDate = formatDate(firstDay);
+                    currentEndDate = formatDate(now);
+                } else {
+                    currentStartDate = "";
+                    currentEndDate = "";
+                }
+
+                document.getElementById('tx-start-date').value = currentStartDate;
+                document.getElementById('tx-end-date').value = currentEndDate;
                 loadTransactionsTable();
-            }, 300);
+            });
         });
 
-        // Modal triggers
+        // Custom Date Range Apply / Clear
+        document.getElementById('btn-apply-custom-date').addEventListener('click', () => {
+            currentStartDate = document.getElementById('tx-start-date').value;
+            currentEndDate = document.getElementById('tx-end-date').value;
+            document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+            loadTransactionsTable();
+        });
+
+        document.getElementById('btn-clear-date').addEventListener('click', () => {
+            currentStartDate = "";
+            currentEndDate = "";
+            document.getElementById('tx-start-date').value = "";
+            document.getElementById('tx-end-date').value = "";
+            document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+            document.querySelector('.date-pill[data-date-range="all"]').classList.add('active');
+            loadTransactionsTable();
+        });
+
+        // CSV Export button
+        document.getElementById('btn-export-csv').addEventListener('click', () => {
+            const query = document.getElementById('tx-search-input').value.trim();
+            let exportUrl = `/api/transactions/export-csv?`;
+            const params = [];
+            if (currentFilterType) params.push(`type=${encodeURIComponent(currentFilterType)}`);
+            if (query) params.push(`search=${encodeURIComponent(query)}`);
+            if (currentStartDate) params.push(`start_date=${encodeURIComponent(currentStartDate)}`);
+            if (currentEndDate) params.push(`end_date=${encodeURIComponent(currentEndDate)}`);
+            
+            window.location.href = exportUrl + params.join('&');
+            showToast('Downloading CSV Report...', 'info');
+        });
+
+        // Search input with debounce
+        document.getElementById('tx-search-input').addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(loadTransactionsTable, 250);
+        });
+
+        // Manual Transaction Modal
         const modal = document.getElementById('manual-tx-modal');
         document.getElementById('btn-open-manual-tx-modal').addEventListener('click', () => modal.style.display = 'flex');
         document.getElementById('modal-close-tx-btn').addEventListener('click', () => modal.style.display = 'none');
         document.getElementById('btn-cancel-tx-modal').addEventListener('click', () => modal.style.display = 'none');
 
-        // Type toggle in modal
+        // Detail Modal close
+        const detailModal = document.getElementById('tx-detail-modal');
+        document.getElementById('modal-close-detail-btn').addEventListener('click', () => detailModal.style.display = 'none');
+        document.getElementById('btn-close-detail-modal').addEventListener('click', () => detailModal.style.display = 'none');
+
+        // Modal type toggle
         const typeSelect = document.getElementById('manual-type');
         typeSelect.addEventListener('change', () => {
             const isExp = typeSelect.value === 'EXPENSE';
@@ -184,7 +305,7 @@
             document.getElementById('party-name-group').style.display = isExp ? 'none' : 'block';
         });
 
-        // Submit manual transaction
+        // Submit manual transaction form
         document.getElementById('manual-tx-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const type = document.getElementById('manual-type').value;
@@ -222,13 +343,16 @@
 
     async function loadTransactionsTable() {
         const query = document.getElementById('tx-search-input').value.trim();
-        let url = `/api/transactions?limit=100`;
-        if (currentFilterType) url += `&type=${currentFilterType}`;
+        let url = `/api/transactions?limit=200`;
+        if (currentFilterType) url += `&type=${encodeURIComponent(currentFilterType)}`;
         if (query) url += `&search=${encodeURIComponent(query)}`;
+        if (currentStartDate) url += `&start_date=${encodeURIComponent(currentStartDate)}`;
+        if (currentEndDate) url += `&end_date=${encodeURIComponent(currentEndDate)}`;
 
         try {
             const res = await fetch(url);
             const txs = await res.json();
+            allLoadedTransactions = txs;
             renderTransactions(txs);
         } catch (err) {
             console.error('Error fetching transactions:', err);
@@ -238,7 +362,7 @@
     function renderTransactions(txs) {
         const tbody = document.getElementById('transactions-tbody');
         if (!txs.length) {
-            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No transactions found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No transactions found matching criteria.</td></tr>';
             return;
         }
 
@@ -259,17 +383,19 @@
                 <tr>
                     <td class="code-font">#${t.id}</td>
                     <td><span class="badge ${badgeClass}">${t.type}</span></td>
-                    <td class="fw-bold">${itemDisplay}</td>
+                    <td class="fw-bold">${escapeHtml(itemDisplay)}</td>
                     <td>${qtyDisplay}</td>
                     <td>${rateDisplay}</td>
                     <td class="fw-bold">₹${t.total_amount.toFixed(2)}</td>
-                    <td>${t.party_name || '--'}</td>
+                    <td>${escapeHtml(t.party_name || '--')}</td>
                     <td>${profitDisplay}</td>
-                    <td><span title="${t.notes || ''}">${t.notes || '--'}</span></td>
-                    <td class="text-muted small">${t.created_at || 'Just now'}</td>
-                    <td>
-                        <button class="btn btn-outline btn-xs text-danger" onclick="deleteTx(${t.id})" title="Delete">
-                            <i class="fa-solid fa-trash-can"></i>
+                    <td class="text-muted small">${t.created_at || 'Recently'}</td>
+                    <td class="text-center action-buttons-cell">
+                        <button class="btn btn-outline btn-xs" onclick="inspectTx(${t.id})" title="Inspect Details">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline btn-xs text-danger" onclick="reverseTx(${t.id})" title="Reverse / Void">
+                            <i class="fa-solid fa-rotate-left"></i>
                         </button>
                     </td>
                 </tr>
@@ -277,17 +403,48 @@
         }).join('');
     }
 
-    async function deleteTx(id) {
-        if (!confirm(`Delete transaction #${id}?`)) return;
+    function inspectTx(id) {
+        const tx = allLoadedTransactions.find(t => t.id === id);
+        if (!tx) return;
+
+        const body = document.getElementById('tx-detail-body');
+        const role = tx.type === 'PURCHASE' ? 'Supplier' : (tx.type === 'SALE' ? 'Customer' : 'Party');
+
+        body.innerHTML = `
+            <div class="tx-detail-grid">
+                <div class="detail-row"><strong>Transaction ID:</strong> <span>#${tx.id}</span></div>
+                <div class="detail-row"><strong>Type:</strong> <span class="badge ${tx.type === 'SALE' ? 'badge-success' : (tx.type === 'PURCHASE' ? 'badge-purple' : 'badge-danger')}">${tx.type}</span></div>
+                <div class="detail-row"><strong>Item / Category:</strong> <span>${escapeHtml(tx.product_name || tx.category || '--')}</span></div>
+                ${tx.quantity ? `<div class="detail-row"><strong>Quantity:</strong> <span>${tx.quantity} ${tx.unit || ''}</span></div>` : ''}
+                ${tx.unit_price ? `<div class="detail-row"><strong>Unit Rate:</strong> <span>₹${tx.unit_price.toFixed(2)}</span></div>` : ''}
+                <div class="detail-row"><strong>Total Amount:</strong> <span class="fw-bold text-success">₹${tx.total_amount.toFixed(2)}</span></div>
+                ${tx.type === 'SALE' ? `<div class="detail-row"><strong>Calculated Profit:</strong> <span class="fw-bold ${tx.profit >= 0 ? 'text-success' : 'text-danger'}">+₹${tx.profit.toFixed(2)}</span></div>` : ''}
+                ${tx.party_name ? `<div class="detail-row"><strong>${role}:</strong> <span>${escapeHtml(tx.party_name)}</span></div>` : ''}
+                ${tx.notes ? `<div class="detail-row"><strong>Notes / Utterance:</strong> <span>${escapeHtml(tx.notes)}</span></div>` : ''}
+                <div class="detail-row"><strong>Timestamp:</strong> <span>${tx.created_at || 'N/A'}</span></div>
+            </div>
+        `;
+
+        document.getElementById('tx-detail-modal').style.display = 'flex';
+    }
+
+    async function reverseTx(id) {
+        const tx = allLoadedTransactions.find(t => t.id === id);
+        const itemDesc = tx ? `${tx.type} #${tx.id} (${tx.product_name || tx.category || ''})` : `transaction #${id}`;
+        
+        if (!confirm(`Are you sure you want to reverse ${itemDesc}?\n\nThis will safely update inventory and restore stock balance.`)) return;
+
         try {
-            const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/transactions/${id}/reverse`, { method: 'POST' });
             const result = await res.json();
             if (result.success) {
-                showToast(`Transaction #${id} deleted`, 'info');
+                showToast(result.message || `Transaction #${id} reversed successfully`, 'success');
                 loadTransactionsTable();
+            } else {
+                showToast(result.message || 'Error reversing transaction', 'error');
             }
         } catch (err) {
-            showToast('Error deleting transaction', 'error');
+            showToast('Network error while reversing transaction', 'error');
         }
     }
 </script>

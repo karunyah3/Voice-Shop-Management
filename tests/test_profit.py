@@ -1,5 +1,6 @@
 """
-Automated Test Suite for Profit and Financial Calculations.
+Automated Test Suite for Profit and Financial Calculations,
+Multi-Period Summaries (Today, Month, All-Time), and Financial Reporting.
 """
 import pytest
 import os
@@ -63,7 +64,26 @@ def test_overall_financial_summary_profit(setup_test_db):
     assert "total_purchases" in summary
     assert "total_expenses" in summary
     assert "net_profit" in summary
+    assert "operating_profit" in summary
+    assert "total_item_profit" in summary
 
     # Verify calculation consistency
     expected_net = round(summary["total_sales"] - summary["total_purchases"] - summary["total_expenses"], 2)
     assert summary["net_profit"] == expected_net
+
+def test_multi_period_summary(setup_test_db):
+    """Test comprehensive Today, Month, and All-Time financial breakdown."""
+    profit_service = ProfitService(db_path=setup_test_db)
+    tx_service = TransactionService(db_path=setup_test_db)
+
+    # Record today's sale
+    tx_service.record_sale("Rice", 2.0, "kg", 100.0, "Walk-in")
+
+    comp = profit_service.get_comprehensive_summary()
+    assert "today" in comp
+    assert "month" in comp
+    assert "all_time" in comp
+
+    assert comp["today"]["total_sales"] >= 100.0
+    assert comp["month"]["total_sales"] >= comp["today"]["total_sales"]
+    assert comp["all_time"]["total_sales"] >= comp["month"]["total_sales"]

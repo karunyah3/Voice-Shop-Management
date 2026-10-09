@@ -924,3 +924,188 @@ body {
 .fw-bold { font-weight: 600; }
 .code-font { font-family: monospace; }
 .small { font-size: 0.75rem; }
+
+/* Period Toggle Group */
+.period-toggle-group {
+    display: inline-flex;
+    background-color: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    gap: 2px;
+}
+
+.period-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.period-btn:hover {
+    color: var(--text-primary);
+}
+
+.period-btn.active {
+    background-color: var(--primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Low Stock Alert Banner */
+.low-stock-alert-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background-color: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-left: 4px solid var(--warning);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1.25rem;
+    color: var(--text-primary);
+}
+
+.low-stock-alert-banner .alert-icon {
+    font-size: 1.15rem;
+    color: var(--warning);
+}
+
+.low-stock-alert-banner .alert-content {
+    flex: 1;
+    font-size: 0.875rem;
+}
+
+.low-stock-alert-banner .alert-action-btn {
+    border-color: var(--warning);
+    color: var(--warning);
+}
+
+.low-stock-alert-banner .alert-action-btn:hover {
+    background-color: var(--warning);
+    color: #000;
+}
+
+/* Date Filters */
+.filter-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.filter-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.date-filter-row {
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.quick-date-pills {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.date-pill {
+    background-color: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    padding: 0.3rem 0.65rem;
+    font-size: 0.775rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.date-pill:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-surface-hover);
+}
+
+.date-pill.active {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+.custom-date-range {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.date-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.date-input-group label {
+    font-size: 0.775rem;
+    color: var(--text-muted);
+}
+
+.form-control-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.775rem;
+    width: 130px;
+}
+
+/* Action buttons cell */
+.action-buttons-cell {
+    display: flex;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+/* Transaction Details Modal Grid */
+.tx-detail-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--bg-surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.85rem;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.detail-row strong {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Chart Header Controls */
+.chart-controls {
+    display: flex;
+    gap: 0.35rem;
+}
+
